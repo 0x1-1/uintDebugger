@@ -1,0 +1,37 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+
+#qt based
+*.user
+Makefile
+
+.moc
+.rcc
+.ui
+.obj
+#bin
+
+Makefile.Debug
+Makefile.Release
+vc100.pdb
+GeneratedFiles/
+TempOutput/
+Release/
+Debug/
+ipch/
+bin/
+updater.sdf
+updater.sln
+updater.suo
+

@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>qtDLGPEBViewClass</class>
+ <widget class="QWidget" name="qtDLGPEBViewClass">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>421</width>
+    <height>572</height>
+   </rect>
+  </property>
+  <property name="contextMenuPolicy">
+   <enum>Qt::CustomContextMenu</enum>
+  </property>
+  <property name="windowTitle">
+   <string>[ uintDebugger ] - PEB View</string>
+  </property>
+  <widget class="QWidget" name="verticalLayoutWidget">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>421</width>
+     <height>571</height>
+    </rect>
+   </property>
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QTreeWidget" name="treePEB">
+      <property name="columnCount">
+       <number>2</number>
+      </property>
+      <attribute name="headerVisible">
+       <bool>false</bool>
+      </attribute>
+      <column>
+       <property name="text">
+        <string notr="true">1</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string notr="true">2</string>
+       </property>
+      </column>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
+

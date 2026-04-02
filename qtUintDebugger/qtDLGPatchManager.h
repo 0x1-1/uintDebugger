@@ -1,0 +1,84 @@
+/*
+ * 	This file is part of uintDebugger.
+ *
+ *    uintDebugger is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
+ *
+ *    uintDebugger is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with uintDebugger.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#ifndef QTDLGPATCHMANAGER_H
+#define QTDLGPATCHMANAGER_H
+
+#include "ui_qtDLGPatchManager.h"
+
+#include <Windows.h>
+
+#include <QList>
+#include <QString>
+
+struct PatchData
+{
+	bool bWritten;
+	bool bSaved;
+	int PID;
+	int PatchSize;
+	HANDLE hProc;
+	PTCHAR ModuleName;
+	QString processModule;
+	LPVOID orgData;
+	LPVOID newData;
+	quint64 Offset;
+	quint64 BaseOffset;
+};
+
+class qtDLGPatchManager : public QWidget, public Ui_qtDLGPatchManagerClass
+{
+	Q_OBJECT
+
+public:
+	qtDLGPatchManager(QWidget *parent, Qt::WindowFlags flags);
+	~qtDLGPatchManager();
+
+	static bool AddNewPatch(int PID, HANDLE hProc, quint64 Offset, int PatchSize, LPVOID newData, bool bRewrite = false);
+	static bool RemovePatch(int PID, quint64 Offset);
+	static bool DeletePatch(int PID, quint64 Offset);
+	static void ClearAllPatches();
+	static void ResetPatches();
+	static void InsertPatchFromProjectFile(PatchData newPatchData);
+
+	static QList<PatchData> GetPatchList();
+
+signals:
+	void OnReloadDebugger();
+
+private:
+	int m_iSelectedRow;
+
+	QList<PatchData> m_patches;
+	
+	static qtDLGPatchManager *pThis;
+
+	bool WritePatchToProc(HANDLE hProc, quint64 Offset, int PatchSize, LPVOID DataToWrite, LPVOID OriginalData, bool bRemove = false);
+	bool SavePatchToFile(QString patchFilePath, QString currentFilePath, QList<PatchData>::iterator currentPatch);
+
+	void SavePatch(quint64 Offset, bool saveAll = false);
+	void UpdatePatchTable();
+	
+private slots:
+	void MenuCallback(QAction*);
+	void UpdateOffsetPatch(HANDLE newOffset, int newPID);
+	void OnCustomContextMenuRequested(QPoint qPoint);
+	void OnPatchRemove();
+	void OnSendToDisassembler(QTableWidgetItem *pSelectedRow);
+	void OnReturnPressed();
+};
+
+#endif

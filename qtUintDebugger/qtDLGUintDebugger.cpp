@@ -1,0 +1,592 @@
+/*
+ * 	This file is part of uintDebugger.
+ *
+ *    uintDebugger is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
+ *
+ *    uintDebugger is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with uintDebugger.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#include <QShortcut>
+
+#include "qtDLGUintDebugger.h"
+#include "qtDLGRegEdit.h"
+#include "qtDLGAssembler.h"
+#include "qtDLGDisassembler.h"
+#include "qtDLGExceptionAsk.h"
+
+#include "clsHelperClass.h"
+#include "clsDisassembler.h"
+#include "clsAPIImport.h"
+#include "clsProjectFile.h"
+#include "clsMemManager.h"
+#include "uintDebuggerVersion.h"
+
+#include <Psapi.h>
+
+qtDLGUintDebugger* qtDLGUintDebugger::qtDLGMyWindow = NULL;
+
+namespace
+{
+QString MainWindowTitle()
+{
+	return QStringLiteral("[" UINTDEBUGGER_DISPLAY_NAME " v " UINTDEBUGGER_VERSION_STRING "]");
+}
+}
+
+qtDLGUintDebugger::qtDLGUintDebugger(QWidget *parent, Qt::WindowFlags flags)
+	: QMainWindow(parent, flags),
+	m_IsRestart(false),
+	lExceptionCount(0)
+{
+	qtDLGMyWindow = this;
+
+	setupUi(this);
+	setWindowTitle(MainWindowTitle());
+
+	QAction *restartAsAdminAction = new QAction("Restart as Administrator", this);
+	menuFile->insertAction(actionFile_Exit, restartAsAdminAction);
+	connect(restartAsAdminAction, SIGNAL(triggered()), this, SLOT(action_FileRestartAsAdmin()));
+
+	setAcceptDrops(true);
+
+	QApplication::setStyle("Fusion");
+	qApp->setStyleSheet(clsHelperClass::LoadStyleSheet());
+
+	qRegisterMetaType<DWORD>("DWORD");
+	qRegisterMetaType<quint64>("quint64");
+	qRegisterMetaType<BPStruct>("BPStruct");
+	qRegisterMetaType<HANDLE>("HANDLE");
+	qRegisterMetaType<QList<callstackDisplay>>("QList<callstackDisplay>");
+
+	clsAPIImport::LoadFunctions();
+
+	coreBPManager	= new clsBreakpointManager;
+	PEManager		= new clsPEManager;
+	coreDebugger	= new clsDebugger();
+	coreDisAs		= new clsDisassembler;
+	dlgDetInfo		= new qtDLGDetailInfo(this,Qt::Window);
+	dlgDbgStr		= new qtDLGDebugStrings(this,Qt::Window);
+	dlgBPManager	= new qtDLGBreakPointManager(this,Qt::Window);
+	dlgTraceWindow	= new qtDLGTrace(this,Qt::Window);
+	dlgPatchManager = new qtDLGPatchManager(this,Qt::Window);
+	dlgBookmark		= new qtDLGBookmark(this, Qt::Window);
+	disasColor		= new disasColors;	
+	settingManager	= clsAppSettings::SharedInstance();
+
+	LoadWidgets();
+
+	settingManager->CheckIfFirstRun();
+	settingManager->LoadDebuggerSettings();
+	settingManager->LoadDisassemblerColor();
+	settingManager->LoadRecentDebuggedFiles(m_recentDebuggedFiles);
+	
+	LoadRecentFileMenu(true);
+
+	DisAsGUI = new qtDLGDisassembler(this);
+	this->setCentralWidget(DisAsGUI);
+
+	// Callbacks from Debugger Thread to GUI
+	connect(coreDebugger,SIGNAL(OnThread(DWORD,DWORD,quint64,bool,DWORD,bool)),
+		dlgDetInfo,SLOT(OnThread(DWORD,DWORD,quint64,bool,DWORD,bool)),Qt::QueuedConnection);
+	connect(coreDebugger,SIGNAL(OnPID(DWORD,QString,DWORD,quint64,bool)),
+		dlgDetInfo,SLOT(OnPID(DWORD,QString,DWORD,quint64,bool)),Qt::QueuedConnection);
+	connect(coreDebugger,SIGNAL(OnException(QString,QString,quint64,quint64,DWORD,DWORD)),
+		dlgDetInfo,SLOT(OnException(QString,QString,quint64,quint64,DWORD,DWORD)),Qt::QueuedConnection);
+	connect(coreDebugger,SIGNAL(OnDbgString(QString,DWORD)),
+		dlgDbgStr,SLOT(OnDbgString(QString,DWORD)),Qt::QueuedConnection);
+	connect(coreDebugger,SIGNAL(OnDll(QString,DWORD,quint64,bool)),
+		dlgDetInfo,SLOT(OnDll(QString,DWORD,quint64,bool)),Qt::QueuedConnection);
+	connect(coreDebugger,SIGNAL(OnLog(QString)),
+		logView,SLOT(OnLog(QString)),Qt::QueuedConnection);
+	connect(coreDebugger,SIGNAL(AskForException(DWORD)),this,SLOT(AskForException(DWORD)),Qt::QueuedConnection);
+	connect(coreDebugger,SIGNAL(OnDebuggerBreak()),this,SLOT(OnDebuggerBreak()),Qt::QueuedConnection);
+	connect(coreDebugger,SIGNAL(OnDebuggerTerminated()),this,SLOT(OnDebuggerTerminated()),Qt::QueuedConnection);
+	connect(coreDebugger,SIGNAL(OnNewPID(QString,int)),dlgBPManager,SLOT(UpdateCompleter(QString,int)),Qt::QueuedConnection);
+	connect(coreDebugger,SIGNAL(OnNewPID(QString,int)),dlgBookmark,SLOT(UpdateBookmarks(QString,int)),Qt::QueuedConnection);
+	connect(coreDebugger,SIGNAL(UpdateOffsetsPatches(HANDLE,int)),dlgPatchManager,SLOT(UpdateOffsetPatch(HANDLE,int)),Qt::QueuedConnection);
+	connect(coreDebugger,SIGNAL(UpdateOffsetsPatches(HANDLE,int)),dlgBookmark,SLOT(BookmarkUpdateOffsets(HANDLE,int)),Qt::QueuedConnection);
+
+	connect(coreBPManager,SIGNAL(OnBreakpointAdded(BPStruct,int)),dlgBPManager,SLOT(OnUpdate(BPStruct,int)),Qt::QueuedConnection);
+	connect(coreBPManager,SIGNAL(OnBreakpointDeleted(quint64)),dlgBPManager,SLOT(OnDelete(quint64)),Qt::QueuedConnection);
+
+	// Callbacks from Debugger to PEManager
+	connect(coreDebugger,SIGNAL(DeletePEManagerObject(QString,int)),PEManager,SLOT(CloseFile(QString,int)),Qt::QueuedConnection);
+
+	// Actions for the MainMenu and Toolbar
+	connect(actionFile_OpenNew, SIGNAL(triggered()), this, SLOT(action_FileOpenNewFile()));
+	connect(actionFile_AttachTo, SIGNAL(triggered()), this, SLOT(action_FileAttachTo()));
+	connect(actionFile_Detach, SIGNAL(triggered()), this, SLOT(action_FileDetach()));
+	connect(actionFile_Exit, SIGNAL(triggered()), this, SLOT(action_FileTerminateGUI()));
+	connect(actionFile_Load, SIGNAL(triggered()), this, SLOT(action_FileLoad()));
+	connect(actionFile_Save, SIGNAL(triggered()), this, SLOT(action_FileSave()));
+	connect(actionDebug_Start, SIGNAL(triggered()), this, SLOT(action_DebugStart()));
+	connect(actionDebug_Stop, SIGNAL(triggered()), this, SLOT(action_DebugStop()));
+	connect(actionDebug_Restart, SIGNAL(triggered()), this, SLOT(action_DebugRestart()));
+	connect(actionDebug_Suspend, SIGNAL(triggered()), this, SLOT(action_DebugSuspend()));
+	connect(actionDebug_Step_In, SIGNAL(triggered()), this, SLOT(action_DebugStepIn()));
+	connect(actionDebug_Step_Out, SIGNAL(triggered()), this, SLOT(action_DebugStepOut()));
+	connect(actionDebug_Step_Over, SIGNAL(triggered()), this, SLOT(action_DebugStepOver()));
+	connect(actionOptions_About, SIGNAL(triggered()), this, SLOT(action_OptionsAbout()));
+	connect(actionOptions_Options, SIGNAL(triggered()), this, SLOT(action_OptionsOptions()));
+	connect(actionOptions_Update, SIGNAL(triggered()), this, SLOT(action_OptionsUpdate()));
+	connect(actionWindow_Detail_Information, SIGNAL(triggered()), this, SLOT(action_WindowDetailInformation()));
+	connect(actionWindow_Breakpoint_Manager, SIGNAL(triggered()), this, SLOT(action_WindowBreakpointManager()));
+	connect(actionWindow_Show_Patches, SIGNAL(triggered()), this, SLOT(action_WindowPatches()));
+	connect(actionWindow_Show_Memory, SIGNAL(triggered()), this, SLOT(action_WindowShowMemory()));
+	connect(actionWindow_Show_Heap, SIGNAL(triggered()), this, SLOT(action_WindowShowHeap()));
+	connect(actionWindow_Show_Strings, SIGNAL(triggered()), this, SLOT(action_WindowShowStrings()));
+	connect(actionWindow_Show_Debug_Output, SIGNAL(triggered()), this, SLOT(action_WindowShowDebugOutput()));
+	connect(actionWindow_Show_Handles, SIGNAL(triggered()), this, SLOT(action_WindowShowHandles()));
+	connect(actionWindow_Show_Windows, SIGNAL(triggered()), this, SLOT(action_WindowShowWindows()));
+	connect(actionWindow_Show_Functions, SIGNAL(triggered()), this, SLOT(action_WindowShowFunctions()));
+	connect(actionWindow_Show_Privileges, SIGNAL(triggered()), this, SLOT(action_WindowShowPrivileges()));
+	connect(actionWindow_Show_Bookmarks, SIGNAL(triggered()), this, SLOT(action_WindowShowBookmarks()));
+	connect(action_Debug_Run_to_UserCode,SIGNAL(triggered()), this, SLOT(action_DebugRunToUserCode()));
+	connect(actionDebug_Trace_Start, SIGNAL(triggered()), this, SLOT(action_DebugTraceStart()));
+	connect(actionDebug_Trace_Stop, SIGNAL(triggered()), this, SLOT(action_DebugTraceStop()));
+	connect(actionDebug_Trace_Show, SIGNAL(triggered()), this, SLOT(action_DebugTraceShow()));
+	connect(actionWindow_Show_PEEditor, SIGNAL(triggered()), this, SLOT(action_WindowShowPEEditor()));
+
+	// Callbacks to display disassembly
+	connect(dlgTraceWindow,SIGNAL(OnDisplayDisassembly(quint64)),DisAsGUI,SLOT(OnDisplayDisassembly(quint64)));
+	connect(cpuRegView,SIGNAL(OnDisplayDisassembly(quint64)),DisAsGUI,SLOT(OnDisplayDisassembly(quint64)));
+	connect(dlgDetInfo,SIGNAL(ShowInDisassembler(quint64)),DisAsGUI,SLOT(OnDisplayDisassembly(quint64)));
+	connect(coreDisAs,SIGNAL(DisAsFinished(quint64)),DisAsGUI,SLOT(OnDisplayDisassembly(quint64)),Qt::QueuedConnection);
+	connect(dlgBPManager,SIGNAL(OnDisplayDisassembly(quint64)),DisAsGUI,SLOT(OnDisplayDisassembly(quint64)));
+	connect(dlgBookmark,SIGNAL(ShowInDisassembler(quint64)),DisAsGUI,SLOT(OnDisplayDisassembly(quint64)));
+
+	// Callbacks from PatchManager to GUI
+	connect(dlgPatchManager,SIGNAL(OnReloadDebugger()),this,SLOT(OnDebuggerBreak()));
+
+	// Callbacks from Disassembler GUI to GUI
+	connect(DisAsGUI,SIGNAL(OnDebuggerBreak()),this,SLOT(OnDebuggerBreak()));
+
+	// Callbacks to StateBar
+	connect(dlgTraceWindow,SIGNAL(OnUpdateStatusBar(int,quint64)),this,SLOT(UpdateStateBar(int,quint64)));
+
+	actionDebug_Trace_Stop->setDisabled(true);
+
+	ParseCommandLineArgs();
+}
+
+qtDLGUintDebugger::~qtDLGUintDebugger()
+{
+	settingManager->SaveDebuggerSettings();
+	settingManager->SaveDisassemblerColor();
+	settingManager->SaveRecentDebuggedFiles(m_recentDebuggedFiles);
+
+	delete coreBPManager;
+	delete coreDebugger;
+	delete coreDisAs;
+	delete PEManager;
+	delete settingManager;
+	delete dlgDetInfo;
+	delete dlgDbgStr;
+	delete dlgBPManager;
+	delete dlgTraceWindow;
+	delete dlgPatchManager;
+	delete dlgBookmark;
+	delete disasColor;
+	delete cpuRegView;
+	delete callstackView;
+	delete stackView;
+	delete logView;
+	delete DisAsGUI;
+	delete m_pRecentFiles;
+}
+
+qtDLGUintDebugger* qtDLGUintDebugger::GetInstance()
+{
+	return qtDLGMyWindow;
+}
+
+void qtDLGUintDebugger::LoadWidgets()
+{
+	this->cpuRegView	= new qtDLGRegisters(this);
+	this->callstackView = new qtDLGCallstack(this);
+	this->stackView		= new qtDLGStack(this);
+	this->logView		= new qtDLGLogView(this);
+
+	this->addDockWidget(Qt::RightDockWidgetArea, this->cpuRegView);
+	this->addDockWidget(Qt::BottomDockWidgetArea, this->callstackView);
+
+	this->addDockWidget(Qt::BottomDockWidgetArea, this->stackView);
+	this->addDockWidget(Qt::BottomDockWidgetArea, this->logView);
+
+	if (!settingManager->RestoreWindowState(this))
+	{
+		this->splitDockWidget(this->callstackView, this->stackView, Qt::Vertical);
+		this->splitDockWidget(this->stackView, this->logView, Qt::Horizontal);
+	}
+}
+
+void qtDLGUintDebugger::OnDebuggerBreak()
+{
+	if(!coreDebugger->GetDebuggingState())
+		UpdateStateBar(STATE_TERMINATE);
+	else
+	{
+		// clear tracing stuff
+		coreDebugger->SetTraceFlagForPID(coreDebugger->GetCurrentPID(), false);
+		actionDebug_Trace_Stop->setEnabled(false);
+		actionDebug_Trace_Start->setEnabled(true);
+		qtDLGTrace::disableStatusBarTimer();
+
+		// display callstack
+		callstackView->ShowCallStack();
+
+		// display Reg
+		cpuRegView->LoadRegView();
+
+		// display StackView
+		quint64 dwEIP = NULL;
+#ifdef _AMD64_
+		BOOL bIsWOW64 = false;
+		if(clsAPIImport::pIsWow64Process)
+			clsAPIImport::pIsWow64Process(coreDebugger->GetCurrentProcessHandle(),&bIsWOW64);
+
+		if(bIsWOW64)
+		{
+			dwEIP = coreDebugger->wowProcessContext.Eip;
+			stackView->LoadStackView(coreDebugger->wowProcessContext.Esp,4);
+		}
+		else
+		{
+			dwEIP = coreDebugger->ProcessContext.Rip;
+			stackView->LoadStackView(coreDebugger->ProcessContext.Rsp,8);
+		}
+#else
+		dwEIP = coreDebugger->ProcessContext.Eip;
+		stackView->LoadStackView(coreDebugger->ProcessContext.Esp,4);
+#endif
+
+		// display Disassembler
+		DisAsGUI->OnDisplayDisassembly(dwEIP);
+
+		// update Toolbar
+		UpdateStateBar(STATE_SUSPEND);
+	}
+}
+
+void qtDLGUintDebugger::UpdateStateBar(int actionType, quint64 stepCount)
+{
+	QString qsStateMessage = QString::asprintf("\t\tPIDs: %d  TIDs: %d  DLLs: %d  Exceptions: %d State: ",
+		coreDebugger->PIDs.size(),
+		coreDebugger->TIDs.size(),
+		coreDebugger->DLLs.size(),
+		lExceptionCount);
+
+	switch(actionType)
+	{
+	case 1: // Running
+		stateBar->setStyleSheet("QStatusBar { background-color: #123525; color: #ecfff1; font-weight: 600; }");
+		qsStateMessage.append("Running");
+		break;
+	case 2: // Suspended
+		stateBar->setStyleSheet("QStatusBar { background-color: #5d4700; color: #fff5cc; font-weight: 600; }");
+		qsStateMessage.append("Suspended");
+		break;
+	case 3: // Terminated
+		stateBar->setStyleSheet("QStatusBar { background-color: #5a1d1d; color: #ffe1e1; font-weight: 600; }");
+		qsStateMessage.append("Terminated");
+		break;
+	case 4: // Tracing
+		stateBar->setStyleSheet("QStatusBar { background-color: #163a5f; color: #eaf4ff; font-weight: 600; }");
+		qsStateMessage.append(QString("Tracing - %1/s").arg(stepCount));
+		break;
+	}
+
+	stateBar->showMessage(qsStateMessage);
+}
+
+void qtDLGUintDebugger::CleanGUI(bool bKeepLogBox)
+{
+	if(!bKeepLogBox) logView->tblLogBox->setRowCount(0);
+	callstackView->tblCallstack->setRowCount(0);
+	DisAsGUI->tblDisAs->setRowCount(0);
+	cpuRegView->tblRegView->setRowCount(0);
+	stackView->tblStack->setRowCount(0);
+
+	dlgDetInfo->tblPIDs->setRowCount(0);
+	dlgDetInfo->tblTIDs->setRowCount(0);
+	dlgDetInfo->tblExceptions->setRowCount(0);
+	dlgDetInfo->tblModules->setRowCount(0);
+
+	dlgTraceWindow->tblTraceLog->setRowCount(0);
+
+	DisAsGUI->dlgSourceViewer->listSource->clear();
+
+	dlgDbgStr->tblDebugStrings->setRowCount(0);
+
+	lExceptionCount = 0;
+}
+
+void qtDLGUintDebugger::ClearDebugData(bool cleanGUI)
+{
+	if(cleanGUI)
+		CleanGUI();
+
+	qtDLGBookmark::BookmarkClear();
+	qtDLGPatchManager::ClearAllPatches();
+	qtDLGTrace::disableStatusBarTimer();
+	qtDLGTrace::clearTraceData();
+
+	PEManager->CleanPEManager();
+	coreBPManager->BreakpointClear();
+	coreDisAs->SectionDisAs.clear();
+	dlgBPManager->DeleteCompleterContent();
+}
+
+void qtDLGUintDebugger::OnDebuggerTerminated()
+{
+	PEManager->CleanPEManager();
+	coreDisAs->SectionDisAs.clear();
+	dlgBPManager->DeleteCompleterContent();
+	qtDLGTrace::disableStatusBarTimer();
+	qtDLGTrace::clearTraceData();
+	actionDebug_Trace_Start->setEnabled(true);
+	actionDebug_Trace_Stop->setEnabled(false);
+	CleanGUI(true);
+	this->setWindowTitle(MainWindowTitle());
+	qtDLGPatchManager::ResetPatches();
+	UpdateStateBar(STATE_TERMINATE);
+	LoadRecentFileMenu();
+	
+	if(m_IsRestart)
+	{
+		m_IsRestart = false;
+		action_DebugStart();
+	}
+}
+
+void qtDLGUintDebugger::GenerateMenuCallback(QAction *qAction)
+{
+	m_iMenuProcessID = qAction->text().toULong(0,16);
+}
+
+void qtDLGUintDebugger::GenerateMenu(bool isAllEnabled)
+{
+	int activeProcessCount = 0;
+	
+	for(int i = 0; i < coreDebugger->PIDs.size(); i++)
+	{
+		if(coreDebugger->PIDs[i].bRunning)
+			activeProcessCount++;
+	}
+
+	if(activeProcessCount > 1)
+	{
+		QAction *qAction;
+		QMenu menu;
+
+		for(int i = 0; i < coreDebugger->PIDs.size(); i++)
+		{
+			if(coreDebugger->PIDs[i].bRunning)
+			{
+				qAction = new QAction(QString::asprintf("%08X",coreDebugger->PIDs[i].dwPID),this);
+				menu.addAction(qAction);
+			}
+		}
+		
+		if(isAllEnabled)
+		{
+			menu.addSeparator();
+
+			qAction = new QAction("All",this);
+			menu.addAction(qAction);
+		}
+
+		connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(GenerateMenuCallback(QAction*)));
+		menu.exec(QCursor::pos());
+	}
+	else
+	{
+		m_iMenuProcessID = coreDebugger->PIDs[0].dwPID;
+	}
+}
+
+void qtDLGUintDebugger::dragEnterEvent(QDragEnterEvent* pEvent)
+{
+	if(pEvent->mimeData()->hasUrls())
+	{
+        pEvent->acceptProposedAction();
+    }
+}
+
+void qtDLGUintDebugger::dropEvent(QDropEvent* pEvent)
+{ 
+	if(pEvent->mimeData()->hasUrls())
+    {
+		QString droppedFile = QString(pEvent->mimeData()->data("FileName"));
+
+		if(droppedFile.contains(".lnk", Qt::CaseInsensitive))
+		{
+			coreDebugger->SetTarget(clsHelperClass::ResolveShortcut(droppedFile));
+			action_DebugStart();
+		}
+		else if(droppedFile.contains(".exe", Qt::CaseInsensitive))
+		{
+			coreDebugger->SetTarget(droppedFile);
+			action_DebugStart();
+		}
+		else if(droppedFile.contains(".ndb", Qt::CaseInsensitive))
+		{
+			if(coreDebugger->GetDebuggingState())
+			{
+				QMessageBox::warning(this, "uintDebugger", "Please finish debugging first!", QMessageBox::Ok, QMessageBox::Ok);
+				return;
+			}
+
+			bool startDebugging = false;
+			clsProjectFile(false, &startDebugging, droppedFile);
+
+			if(startDebugging)
+				action_DebugStart();
+		}
+		else
+		{
+			QMessageBox::critical(this, "uintDebugger", "This seems to be an invalid file!", QMessageBox::Ok, QMessageBox::Ok);
+		}
+
+		pEvent->acceptProposedAction();
+    }
+}
+
+void qtDLGUintDebugger::closeEvent(QCloseEvent* closeEvent)
+{
+	clsAppSettings::SharedInstance()->SaveWindowState(this);
+
+	closeEvent->accept();
+}
+
+void qtDLGUintDebugger::ParseCommandLineArgs()
+{
+	PTCHAR currentCommandLine = GetCommandLineW();
+	QStringList splittedCommandLine = QString::fromWCharArray(currentCommandLine, wcslen(currentCommandLine)).split(" ");
+
+	for(QStringList::const_iterator i = splittedCommandLine.constBegin(); i != splittedCommandLine.constEnd(); ++i)
+	{
+		if(i->compare("-p") == 0)
+		{
+			i++;
+			if(i == splittedCommandLine.constEnd()) return;
+			int PID = i->toULong();
+
+			HANDLE hProc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,false,PID);
+			if(hProc == NULL) return;
+
+			PTCHAR processFile = (PTCHAR)clsMemManager::CAlloc(MAX_PATH * sizeof(TCHAR));
+			if(GetModuleFileNameEx(hProc,NULL,processFile,MAX_PATH) <= 0)
+			{
+				CloseHandle(hProc);
+				clsMemManager::CFree(processFile);
+				return;
+			}
+			QString procFile = QString::fromWCharArray(processFile,MAX_PATH);
+
+			CloseHandle(hProc);
+			clsMemManager::CFree(processFile);
+			action_DebugAttachStart(PID,procFile);
+			return;
+		}
+		else if(i->compare("-s") == 0)
+		{
+			i++;
+			if(i == splittedCommandLine.constEnd()) return;
+
+			coreDebugger->SetTarget(*i);
+
+			for(QStringList::const_iterator commandLineSearch = splittedCommandLine.constBegin(); commandLineSearch != splittedCommandLine.constEnd(); ++commandLineSearch)
+			{
+				if(commandLineSearch->compare("-c") == 0)
+				{
+					commandLineSearch++;
+					if(commandLineSearch == splittedCommandLine.constEnd()) break;
+
+					coreDebugger->SetCommandLine(*commandLineSearch);
+				}
+			}
+
+			action_DebugStart();
+			return;
+		}
+		else if(i->compare("-f") == 0)
+		{
+			i++;
+			if(i == splittedCommandLine.constEnd()) return;
+
+			QString temp = *i;
+
+			bool startDebugging = false;
+			clsProjectFile(false, &startDebugging, temp.replace("\"", ""));
+
+			if(startDebugging)
+				action_DebugStart();
+		}
+	}
+	return;
+}
+
+void qtDLGUintDebugger::AskForException(DWORD exceptionCode)
+{
+	qtDLGExceptionAsk *newException = new qtDLGExceptionAsk(exceptionCode, this, Qt::Window);
+	connect(newException,SIGNAL(ContinueException(int)),coreDebugger,SLOT(HandleForException(int)),Qt::QueuedConnection);
+
+	newException->exec();
+}
+
+void qtDLGUintDebugger::LoadRecentFileMenu(bool isFirstLoad)
+{
+	if(!isFirstLoad)
+		delete m_pRecentFiles;
+	
+	m_pRecentFiles = new QMenu(menuFile);
+	m_pRecentFiles->setTitle("Recent Files");
+
+	for(int i = 0; i < 5; i++)
+	{
+		if(m_recentDebuggedFiles.value(i).length() > 0)
+			m_pRecentFiles->addAction(new QAction(m_recentDebuggedFiles.value(i),this));
+	}
+
+	menuFile->addMenu(m_pRecentFiles);
+	connect(m_pRecentFiles,SIGNAL(triggered(QAction*)),this,SLOT(DebugRecentFile(QAction*)));
+}
+
+void qtDLGUintDebugger::DebugRecentFile(QAction *qAction)
+{
+	if(!coreDebugger->GetDebuggingState())
+	{
+		ClearDebugData(true);
+
+		coreDebugger->ClearTarget();
+		coreDebugger->ClearCommandLine();
+		coreDebugger->SetTarget(qAction->text());
+		action_DebugStart();
+	}
+	else
+		QMessageBox::warning(this,"uintDebugger","You have a process running. Please terminate this one first!",QMessageBox::Ok,QMessageBox::Ok);
+}
+
+void qtDLGUintDebugger::InsertRecentDebuggedFile(QString fileName)
+{
+	QStringList tempFileList;
+
+	tempFileList.append(fileName);
+
+	for(int i = 0; i < 4; i++)
+	{
+		if(!m_recentDebuggedFiles.value(i).contains(fileName, Qt::CaseInsensitive))
+			tempFileList.append(m_recentDebuggedFiles.value(i));
+	}
+
+	m_recentDebuggedFiles = tempFileList;
+}
