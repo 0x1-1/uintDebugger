@@ -26,8 +26,10 @@
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QDebug>
+#include <QFile>
 #include <QFileInfo>
 #include <QTimer>
 
@@ -245,6 +247,7 @@ void UUpdateWidget::slot_showUpdatesTable(UUpdatesModel *model)
 
     m_updatesTableView->resizeColumnsToContents();
     m_updatesTableView->setColumnHidden(UUpdatesModel::eURI, true);
+    m_updatesTableView->setColumnHidden(UUpdatesModel::eSHA256, true);
 
     m_stackedWidget->setCurrentIndex(2);
     m_toolBarActions.at(eINSTALL_UPDATES_ACTION)->setEnabled(true);
@@ -256,13 +259,46 @@ void UUpdateWidget::slot_downloadFileFinished()
 {
     m_toolBarActions.at(eINSTALL_UPDATES_ACTION)->setEnabled(false);
 
-    m_currentDownloadFile++;
-
     QAbstractTableModel *model = (UUpdatesModel *)m_updatesTableView->model();
 
-    if (m_currentDownloadFile == model->rowCount()) {
-        Q_EMIT signal_downloadUpdatesFinished();
+    // m_currentDownloadFile starts at UINT_MAX (set to -1). The first call is from the
+    // toolbar button, so no file has been downloaded yet. Subsequent calls are from the
+    // downloader signal — verify the file that was just downloaded before proceeding.
+    if(m_currentDownloadFile != (unsigned int)-1)
+    {
+        const QModelIndex pkgIdx    = model->index(m_currentDownloadFile, UUpdatesModel::ePACKAGE);
+        const QModelIndex sha256Idx = model->index(m_currentDownloadFile, UUpdatesModel::eSHA256);
 
+        const QString relativePath   = QDir::fromNativeSeparators(model->data(pkgIdx,    Qt::DisplayRole).toString());
+        const QString expectedHash   = model->data(sha256Idx, Qt::DisplayRole).toString().trimmed().toLower();
+        const QString downloadedPath = QDir(updatesRootDir()).filePath(relativePath);
+
+        if(!expectedHash.isEmpty())
+        {
+            QFile file(downloadedPath);
+            if(!file.open(QIODevice::ReadOnly))
+            {
+                slot_error(tr("Could not open downloaded file for verification: %1").arg(relativePath));
+                return;
+            }
+            QCryptographicHash hash(QCryptographicHash::Sha256);
+            hash.addData(&file);
+            const QString actualHash = QString::fromLatin1(hash.result().toHex().toLower());
+
+            if(actualHash != expectedHash)
+            {
+                QFile::remove(downloadedPath);
+                slot_error(tr("SHA-256 verification failed for %1.\nExpected: %2\nActual:   %3\n\nThe corrupted file has been removed.")
+                    .arg(relativePath, expectedHash, actualHash));
+                return;
+            }
+        }
+    }
+
+    m_currentDownloadFile++;
+
+    if(m_currentDownloadFile == (unsigned int)model->rowCount()) {
+        Q_EMIT signal_downloadUpdatesFinished();
         return;
     }
 

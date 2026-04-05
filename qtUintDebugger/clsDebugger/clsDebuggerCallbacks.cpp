@@ -21,29 +21,31 @@
 
 bool clsDebugger::PBThreadInfo(DWORD dwPID, DWORD dwTID, quint64 dwEP, bool bSuspended, DWORD dwExitCode, bool isNewThread)
 {
-	if(isNewThread)
 	{
-		ThreadStruct newTID;
-		newTID.bSuspended = bSuspended;
-		newTID.dwEP = dwEP;
-		newTID.dwTID = dwTID;
-		newTID.dwPID = dwPID;
-		newTID.dwExitCode = 0;
-
-		TIDs.append(newTID);
-	}
-	else
-	{
-		for(int i = 0;i < TIDs.size();i++)
+		QWriteLocker locker(&m_stateLock);
+		if(isNewThread)
 		{
-			if(TIDs[i].dwTID == dwTID && TIDs[i].dwPID == dwPID)
-			{
-				TIDs[i].dwExitCode = dwExitCode;
+			ThreadStruct newTID;
+			newTID.bSuspended = bSuspended;
+			newTID.dwEP = dwEP;
+			newTID.dwTID = dwTID;
+			newTID.dwPID = dwPID;
+			newTID.dwExitCode = 0;
 
-				break;
+			TIDs.append(newTID);
+		}
+		else
+		{
+			for(int i = 0;i < TIDs.size();i++)
+			{
+				if(TIDs[i].dwTID == dwTID && TIDs[i].dwPID == dwPID)
+				{
+					TIDs[i].dwExitCode = dwExitCode;
+					break;
+				}
 			}
 		}
-	}
+	} // lock released before emit to avoid UI-side deadlock on read lock
 
 	emit OnThread(dwPID, dwTID, dwEP, bSuspended, dwExitCode, isNewThread);
 	return true;
@@ -51,43 +53,49 @@ bool clsDebugger::PBThreadInfo(DWORD dwPID, DWORD dwTID, quint64 dwEP, bool bSus
 
 bool clsDebugger::PBProcInfo(DWORD dwPID, PTCHAR sFileName, quint64 dwEP, DWORD dwExitCode, HANDLE hProc, DWORD64 imageBase, bool isNewProc)
 {
-	if(isNewProc)
+	bool bEmitNew = false;
+
 	{
-		PIDStruct newPID = { 0 };
-
-		newPID.dwPID = dwPID;
-		newPID.dwEP = dwEP;
-		newPID.sFileName = sFileName;
-		newPID.dwExitCode = dwExitCode;
-		newPID.hProc = hProc;
-		newPID.bRunning = true;
-		newPID.imageBase = imageBase;
-
-		if(!m_normalDebugging)
+		QWriteLocker locker(&m_stateLock);
+		if(isNewProc)
 		{
-			m_normalDebugging = true;
-			newPID.bKernelBP = true;
-		}
+			PIDStruct newPID = { 0 };
 
-		PIDs.append(newPID);
+			newPID.dwPID = dwPID;
+			newPID.dwEP = dwEP;
+			newPID.sFileName = sFileName;
+			newPID.dwExitCode = dwExitCode;
+			newPID.hProc = hProc;
+			newPID.bRunning = true;
+			newPID.imageBase = imageBase;
 
-		emit OnPID(dwPID, QString::fromWCharArray(sFileName), dwExitCode, dwEP, true);
-	}
-	else
-	{
-		for(int i = 0;i < PIDs.size();i++)
-		{
-			if(PIDs[i].dwPID == dwPID)
+			if(!m_normalDebugging)
 			{
-				PIDs[i].dwExitCode = dwExitCode;
-				PIDs[i].bRunning = false;
+				m_normalDebugging = true;
+				newPID.bKernelBP = true;
+			}
 
-				break;
+			PIDs.append(newPID);
+			bEmitNew = true;
+		}
+		else
+		{
+			for(int i = 0;i < PIDs.size();i++)
+			{
+				if(PIDs[i].dwPID == dwPID)
+				{
+					PIDs[i].dwExitCode = dwExitCode;
+					PIDs[i].bRunning = false;
+					break;
+				}
 			}
 		}
+	} // lock released before emit
 
+	if(bEmitNew)
+		emit OnPID(dwPID, QString::fromWCharArray(sFileName), dwExitCode, dwEP, true);
+	else
 		emit OnPID(dwPID, "", dwExitCode, NULL, false);
-	}
 
 	return true;
 }
@@ -103,25 +111,37 @@ bool clsDebugger::PBExceptionInfo(quint64 dwExceptionOffset, quint64 dwException
 
 bool clsDebugger::PBDLLInfo(PTCHAR sDLLPath, DWORD dwPID, quint64 dwEP, bool bLoaded, DLLStruct *pFoundDLL)
 {
-	if(!bLoaded && pFoundDLL != NULL)
-	{
-		pFoundDLL->bLoaded = false;
-		emit OnDll(QString::fromWCharArray(pFoundDLL->sPath), pFoundDLL->dwPID, pFoundDLL->dwBaseAdr, false);
-	}
-	else
-	{
-		if(sDLLPath == NULL) return false;
-		
-		DLLStruct newDLL;
-		newDLL.bLoaded = true;
-		newDLL.dwBaseAdr = dwEP;
-		newDLL.sPath = sDLLPath;
-		newDLL.dwPID = dwPID;
+	QString emitPath;
+	DWORD   emitPID  = 0;
+	quint64 emitBase = 0;
 
-		DLLs.append(newDLL);
-		emit OnDll(QString::fromWCharArray(newDLL.sPath), newDLL.dwPID, newDLL.dwBaseAdr, true);
-	}	
+	{
+		QWriteLocker locker(&m_stateLock);
+		if(!bLoaded && pFoundDLL != NULL)
+		{
+			pFoundDLL->bLoaded = false;
+			emitPath = QString::fromWCharArray(pFoundDLL->sPath);
+			emitPID  = pFoundDLL->dwPID;
+			emitBase = pFoundDLL->dwBaseAdr;
+		}
+		else
+		{
+			if(sDLLPath == NULL) return false;
 
+			DLLStruct newDLL;
+			newDLL.bLoaded   = true;
+			newDLL.dwBaseAdr = dwEP;
+			newDLL.sPath     = sDLLPath;
+			newDLL.dwPID     = dwPID;
+
+			DLLs.append(newDLL);
+			emitPath = QString::fromWCharArray(newDLL.sPath);
+			emitPID  = newDLL.dwPID;
+			emitBase = newDLL.dwBaseAdr;
+		}
+	} // lock released before emit
+
+	emit OnDll(emitPath, emitPID, emitBase, bLoaded);
 	return true;
 }
 

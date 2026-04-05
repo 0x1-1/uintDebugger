@@ -24,6 +24,7 @@
 #include <Windows.h>
 #include <QObject>
 #include <QList>
+#include <QReadWriteLock>
 	 
 struct BPStruct
 {
@@ -76,10 +77,16 @@ signals:
 	void OnBreakpointAdded(BPStruct newBreakpoint, int breakpointType);
 	void OnBreakpointDeleted(quint64 bpOffset);
 
-private: 
+private:
 	static clsBreakpointManager *pThis;
 
+	// Protects SoftwareBPs, MemoryBPs, HardwareBPs. Take write lock for
+	// structural mutations (append/remove); read lock for iteration.
+	QReadWriteLock m_bpLock;
+
 	void BreakpointRebase(BPStruct *pCurrentBP, int bpType, HANDLE processHandle, DWORD processID);
+	// Lock-free remove used internally by BreakpointClear/BreakpointRemove (caller holds write lock).
+	void BreakpointRemoveImpl(DWORD64 breakpointOffset, DWORD breakpointType);
 };
 
 #endif

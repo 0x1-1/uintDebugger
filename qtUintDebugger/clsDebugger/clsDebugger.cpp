@@ -35,7 +35,14 @@ clsDebugger* clsDebugger::pThis = NULL;
 clsDebugger::clsDebugger() :
 	m_normalDebugging(true),
 	m_isDebugging(false),
+	m_stopDebugging(false),
+	m_singleStepFlag(false),
 	m_debuggerBreak(false),
+	m_continueWithException(0),
+	m_currentPID(0),
+	m_currentTID(0),
+	m_currentProcess(nullptr),
+	m_attachPID(0),
 	m_commandLine("")
 {
 	setObjectName(QStringLiteral("clsDebugger"));
@@ -77,6 +84,8 @@ clsDebugger::~clsDebugger()
 
 void clsDebugger::CleanWorkSpace()
 {
+	QWriteLocker locker(&m_stateLock);
+
 	for(int i = 0; i < PIDs.size(); ++i)
 	{
 		SymCleanup(PIDs.at(i).hProc);
@@ -94,15 +103,26 @@ void clsDebugger::CleanWorkSpace()
 	DLLs.clear();
 	TIDs.clear();
 
-	if(_pi.hProcess != NULL && _pi.hThread != NULL)
+	// Save _pi handles before zeroing so we can compare them against m_dbgPI below.
+	const HANDLE piProc   = _pi.hProcess;
+	const HANDLE piThread = _pi.hThread;
+
+	if(piProc != NULL && piThread != NULL)
 	{
-		CloseHandle(_pi.hProcess);
-		CloseHandle(_pi.hThread);
+		CloseHandle(piProc);
+		CloseHandle(piThread);
 		ZeroMemory(&_si, sizeof(_si));
 		_si.cb = sizeof(_si);
 		ZeroMemory(&_pi, sizeof(_pi));
 	}
-	
+
+	// For attach-debugging, _pi is never populated but m_dbgPI holds real handles
+	// opened by the debug API. Close them only if not already closed via _pi above.
+	if(m_dbgPI.hProcess != NULL && m_dbgPI.hProcess != piProc)
+		CloseHandle(m_dbgPI.hProcess);
+	if(m_dbgPI.hThread != NULL && m_dbgPI.hThread != piThread)
+		CloseHandle(m_dbgPI.hThread);
+
 	ZeroMemory(&m_dbgPI, sizeof(m_dbgPI));
 }
 
@@ -344,21 +364,29 @@ void clsDebugger::DebuggingLoop()
 			}
 		case OUTPUT_DEBUG_STRING_EVENT:
 			{
-				PTCHAR wMsg = (PTCHAR)clsMemManager::CAlloc(debug_event.u.DebugString.nDebugStringLength * sizeof(TCHAR));
+				const WORD msgLen = debug_event.u.DebugString.nDebugStringLength;
+				if(msgLen == 0) break;
+
+				PTCHAR wMsg = (PTCHAR)clsMemManager::CAlloc(msgLen * sizeof(TCHAR));
+				if(wMsg == NULL) break;
+
 				HANDLE hProcess = GetCurrentProcessHandle(debug_event.dwProcessId);
 
 				if(debug_event.u.DebugString.fUnicode)
 				{
-					ReadProcessMemory(hProcess,debug_event.u.DebugString.lpDebugStringData,wMsg,debug_event.u.DebugString.nDebugStringLength,NULL);
+					// nDebugStringLength is in characters for Unicode; TCHAR is WCHAR on this build.
+					ReadProcessMemory(hProcess,debug_event.u.DebugString.lpDebugStringData,wMsg,msgLen,NULL);
 				}
 				else
 				{
-					size_t countConverted = NULL;
-					PCHAR Msg = (PCHAR)clsMemManager::CAlloc(debug_event.u.DebugString.nDebugStringLength * sizeof(CHAR));
-					
-					ReadProcessMemory(hProcess,debug_event.u.DebugString.lpDebugStringData,Msg,debug_event.u.DebugString.nDebugStringLength,NULL);	
-					mbstowcs_s(&countConverted,wMsg,debug_event.u.DebugString.nDebugStringLength,Msg,debug_event.u.DebugString.nDebugStringLength);
-					clsMemManager::CFree(Msg);
+					size_t countConverted = 0;
+					PCHAR Msg = (PCHAR)clsMemManager::CAlloc(msgLen * sizeof(CHAR));
+					if(Msg != NULL)
+					{
+						ReadProcessMemory(hProcess,debug_event.u.DebugString.lpDebugStringData,Msg,msgLen,NULL);
+						mbstowcs_s(&countConverted,wMsg,msgLen,Msg,msgLen);
+						clsMemManager::CFree(Msg);
+					}
 				}
 
 				PBDbgString(wMsg,debug_event.dwProcessId);
@@ -374,7 +402,7 @@ void clsDebugger::DebuggingLoop()
 
 				switch (exInfo->ExceptionCode)
 				{
-				case 0x4000001f: // Breakpoint in x86 Process which got executed in a x64 environment
+				case STATUS_WX86_BREAKPOINT: // Breakpoint in x86 process running under WOW64
 					if(pCurrentPID->bKernelBP && !pCurrentPID->bWOW64KernelBP)
 					{
 						emit OnLog(QString("[!] WOW64 Kernel EP - PID %1 - %2")
@@ -396,6 +424,7 @@ void clsDebugger::DebuggingLoop()
 
 						pCurrentPID->bWOW64KernelBP = true;
 						bIsKernelBP = true;
+						[[fallthrough]]; // WOW64 BP also needs the standard BP handling below
 					}
 				case EXCEPTION_BREAKPOINT:
 					{
@@ -564,7 +593,7 @@ void clsDebugger::DebuggingLoop()
 
 						break;
 					}
-				case 0x4000001E: // Single Step in x86 Process which got executed in a x64 environment
+				case STATUS_WX86_SINGLE_STEP: // Single step in x86 process running under WOW64
 				case EXCEPTION_SINGLE_STEP:
 					{
 						if(pCurrentPID->bTraceFlag && m_singleStepFlag)
@@ -877,8 +906,10 @@ DWORD clsDebugger::CallBreakDebugger(DEBUG_EVENT *debug_event,DWORD dwHandle)
 
 			SetThreadContext(hThread,&ProcessContext);
 #endif
-			m_currentPID = NULL;m_currentTID = NULL;m_currentProcess = NULL;
-			m_debuggerBreak = false;
+			m_currentPID    = 0;
+			m_currentTID    = 0;
+			m_currentProcess = nullptr;
+			m_debuggerBreak  = false;
 
 			CloseHandle(hThread);
 			return DBG_EXCEPTION_HANDLED;
@@ -931,11 +962,11 @@ bool clsDebugger::CheckIfExceptionIsBP(PIDStruct *pCurrentPID, quint64 dwExcepti
 			pCurrentPID->bTrapFlag = false;
 		return true;
 	}
-	else if((dwExceptionType == EXCEPTION_SINGLE_STEP || dwExceptionType == 0x4000001e) && m_singleStepFlag)
+	else if((dwExceptionType == EXCEPTION_SINGLE_STEP || dwExceptionType == STATUS_WX86_SINGLE_STEP) && m_singleStepFlag)
 	{
 		return isExceptionRelevant;
 	}
-	else if(dwExceptionType == EXCEPTION_BREAKPOINT	|| dwExceptionType == 0x4000001f)
+	else if(dwExceptionType == EXCEPTION_BREAKPOINT || dwExceptionType == STATUS_WX86_BREAKPOINT)
 	{
 		for(int i = 0;i < m_pBreakpointManager->SoftwareBPs.size();i++)
 			if(dwExceptionOffset == m_pBreakpointManager->SoftwareBPs[i].dwOffset && (m_pBreakpointManager->SoftwareBPs[i].dwPID == pCurrentPID->dwPID || m_pBreakpointManager->SoftwareBPs[i].dwPID == -1))
@@ -960,7 +991,7 @@ bool clsDebugger::CheckIfExceptionIsBP(PIDStruct *pCurrentPID, quint64 dwExcepti
 				return true;
 		}
 	}
-	else if(dwExceptionType == 0x4000001E || dwExceptionType == EXCEPTION_SINGLE_STEP)
+	else if(dwExceptionType == STATUS_WX86_SINGLE_STEP || dwExceptionType == EXCEPTION_SINGLE_STEP)
 	{
 		for(int i = 0;i < m_pBreakpointManager->HardwareBPs.size();i++)
 			if(dwExceptionOffset == m_pBreakpointManager->HardwareBPs[i].dwOffset && (m_pBreakpointManager->HardwareBPs[i].dwPID == pCurrentPID->dwPID || m_pBreakpointManager->HardwareBPs[i].dwPID == -1))
@@ -1014,23 +1045,25 @@ void clsDebugger::CustomExceptionAdd(DWORD dwExceptionType,DWORD dwAction,quint6
 	custEx.dwAction = dwAction;
 	custEx.dwExceptionType = dwExceptionType;
 	custEx.dwHandler = dwHandler;
+	QWriteLocker locker(&m_stateLock);
 	ExceptionHandler.append(custEx);
 }
 
 void clsDebugger::CustomExceptionRemove(DWORD dwExceptionType)
 {
-	for (QVector<customException>::iterator it = ExceptionHandler.begin(); it != ExceptionHandler.end(); ++it)
+	QWriteLocker locker(&m_stateLock);
+	for (QVector<customException>::iterator it = ExceptionHandler.begin(); it != ExceptionHandler.end(); )
 	{
 		if(it->dwExceptionType == dwExceptionType)
-		{
-			ExceptionHandler.erase(it);
-			it = ExceptionHandler.begin();
-		}
+			it = ExceptionHandler.erase(it);
+		else
+			++it;
 	}
 }
 
 void clsDebugger::CustomExceptionRemoveAll()
 {
+	QWriteLocker locker(&m_stateLock);
 	ExceptionHandler.clear();
 }
 

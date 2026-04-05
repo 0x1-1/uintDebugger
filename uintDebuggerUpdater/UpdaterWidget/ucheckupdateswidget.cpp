@@ -256,6 +256,7 @@ void UCheckUpdatesWidget::slot_manifestDownloaded()
         m_updatesModel->setData(m_updatesModel->index(currentRow, UUpdatesModel::eSIZE), HumanReadableSize(it->size), Qt::DisplayRole);
         m_updatesModel->setData(m_updatesModel->index(currentRow, UUpdatesModel::ePACKAGE), it->relativePath, Qt::DisplayRole);
         m_updatesModel->setData(m_updatesModel->index(currentRow, UUpdatesModel::eURI), asset.downloadUrl.toString(), Qt::DisplayRole);
+        m_updatesModel->setData(m_updatesModel->index(currentRow, UUpdatesModel::eSHA256), QString::fromLatin1(it->sha256), Qt::DisplayRole);
     }
 
     ui->status->setText(tr("Found %1 file(s) to update for %2").arg(m_updatesModel->rowCount()).arg(m_release.versionString));

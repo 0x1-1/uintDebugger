@@ -55,6 +55,7 @@ clsBreakpointManager* clsBreakpointManager::GetInstance()
 
 bool clsBreakpointManager::BreakpointInit(DWORD newProcessID, bool isThread)
 {
+	QReadLocker locker(&m_bpLock);
 	if(!isThread)
 	{
 		for(int i = 0;i < SoftwareBPs.size(); i++)
@@ -93,100 +94,103 @@ bool clsBreakpointManager::BreakpointInit(DWORD newProcessID, bool isThread)
 
 bool clsBreakpointManager::BreakpointClear()
 {
-	// Collect offsets first to avoid iterator invalidation during removal
 	QList<DWORD64> swOffsets, memOffsets, hwOffsets;
-	for(int i = 0; i < SoftwareBPs.size(); i++)
-		swOffsets.append(SoftwareBPs[i].dwOffset);
-	for(int i = 0; i < MemoryBPs.size(); i++)
-		memOffsets.append(MemoryBPs[i].dwOffset);
-	for(int i = 0; i < HardwareBPs.size(); i++)
-		hwOffsets.append(HardwareBPs[i].dwOffset);
+
+	{
+		QWriteLocker locker(&m_bpLock);
+		for(int i = 0; i < SoftwareBPs.size(); i++)
+			swOffsets.append(SoftwareBPs[i].dwOffset);
+		for(int i = 0; i < MemoryBPs.size(); i++)
+			memOffsets.append(MemoryBPs[i].dwOffset);
+		for(int i = 0; i < HardwareBPs.size(); i++)
+			hwOffsets.append(HardwareBPs[i].dwOffset);
+
+		for(int i = 0; i < swOffsets.size(); i++)
+			BreakpointRemoveImpl(swOffsets[i], SOFTWARE_BP);
+		for(int i = 0; i < memOffsets.size(); i++)
+			BreakpointRemoveImpl(memOffsets[i], MEMORY_BP);
+		for(int i = 0; i < hwOffsets.size(); i++)
+			BreakpointRemoveImpl(hwOffsets[i], HARDWARE_BP);
+
+		SoftwareBPs.clear();
+		HardwareBPs.clear();
+		MemoryBPs.clear();
+	} // lock released before emits
 
 	for(int i = 0; i < swOffsets.size(); i++)
-		BreakpointRemove(swOffsets[i], SOFTWARE_BP);
+		emit OnBreakpointDeleted(swOffsets[i]);
 	for(int i = 0; i < memOffsets.size(); i++)
-		BreakpointRemove(memOffsets[i], MEMORY_BP);
+		emit OnBreakpointDeleted(memOffsets[i]);
 	for(int i = 0; i < hwOffsets.size(); i++)
-		BreakpointRemove(hwOffsets[i], HARDWARE_BP);
-
-	SoftwareBPs.clear();
-	HardwareBPs.clear();
-	MemoryBPs.clear();
+		emit OnBreakpointDeleted(hwOffsets[i]);
 
 	return true;
 }
 
-bool clsBreakpointManager::BreakpointRemove(DWORD64 breakpointOffset, DWORD breakpointType) //,DWORD dwPID)
-{ 
+// Caller must hold m_bpLock for writing.
+void clsBreakpointManager::BreakpointRemoveImpl(DWORD64 breakpointOffset, DWORD breakpointType)
+{
 	switch(breakpointType)
 	{
 	case SOFTWARE_BP:
 		{
-			BPStruct *pCurrentBP;
-
 			for (int i = 0; i < SoftwareBPs.size(); i++)
 			{
-				pCurrentBP = &SoftwareBPs[i];
-
+				BPStruct *pCurrentBP = &SoftwareBPs[i];
 				if(pCurrentBP->dwOffset == breakpointOffset)
 				{
 					clsBreakpointSoftware::dSoftwareBP(pCurrentBP->dwPID, pCurrentBP->dwOffset, pCurrentBP->dwSize, pCurrentBP->bOrgByte);
 					clsMemManager::CFree(pCurrentBP->moduleName);
 					clsMemManager::CFree(pCurrentBP->bOrgByte);
-
 					SoftwareBPs.removeAt(i);
-
-					break; // add allows only one so we can stop here
+					break;
 				}
 			}
 			break;
 		}
 	case MEMORY_BP:
 		{
-			BPStruct *pCurrentBP;
-
 			for (int i = 0; i < MemoryBPs.size(); i++)
 			{
-				pCurrentBP = &MemoryBPs[i];
-
+				BPStruct *pCurrentBP = &MemoryBPs[i];
 				if(pCurrentBP->dwOffset == breakpointOffset)
 				{
 					clsBreakpointMemory::dMemoryBP(pCurrentBP->dwPID, pCurrentBP->dwOffset, pCurrentBP->dwSize, pCurrentBP->dwOldProtection);
 					clsMemManager::CFree(pCurrentBP->moduleName);
 					clsMemManager::CFree(pCurrentBP->bOrgByte);
-
 					MemoryBPs.removeAt(i);
-
-					break; // add allows only one so we can stop here
+					break;
 				}
 			}
 			break;
 		}
 	case HARDWARE_BP:
 		{
-			BPStruct *pCurrentBP;
-
 			for (int i = 0; i < HardwareBPs.size(); i++)
 			{
-				pCurrentBP = &HardwareBPs[i];
-
+				BPStruct *pCurrentBP = &HardwareBPs[i];
 				if(pCurrentBP->dwOffset == breakpointOffset)
 				{
 					clsBreakpointHardware::dHardwareBP(pCurrentBP->dwPID, pCurrentBP->dwOffset, pCurrentBP->dwSlot);
 					clsMemManager::CFree(pCurrentBP->moduleName);
 					clsMemManager::CFree(pCurrentBP->bOrgByte);
-
 					HardwareBPs.removeAt(i);
-
-					break; // add allows only one so we can stop here
+					break;
 				}
 			}
 			break;
 		}
 	}
-	
-	emit OnBreakpointDeleted(breakpointOffset);
+}
 
+bool clsBreakpointManager::BreakpointRemove(DWORD64 breakpointOffset, DWORD breakpointType)
+{
+	{
+		QWriteLocker locker(&m_bpLock);
+		BreakpointRemoveImpl(breakpointOffset, breakpointType);
+	} // lock released before emit
+
+	emit OnBreakpointDeleted(breakpointOffset);
 	return true;
 }
 
@@ -197,28 +201,31 @@ bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, D
 	bool	bExists		= false,
 			bRetValue	= false;
 
-	for(int i = 0;i < SoftwareBPs.size();i++)
 	{
-		if(SoftwareBPs[i].dwOffset == breakpointOffset/* && SoftwareBPs[i].dwPID == dwPID */)
+		QReadLocker reader(&m_bpLock);
+		for(int i = 0;i < SoftwareBPs.size();i++)
 		{
-			bExists = true;
-			break;
+			if(SoftwareBPs[i].dwOffset == breakpointOffset)
+			{
+				bExists = true;
+				break;
+			}
 		}
-	}
-	for(int i = 0;i < MemoryBPs.size();i++)
-	{
-		if(MemoryBPs[i].dwOffset == breakpointOffset /* && MemoryBPs[i].dwPID == dwPID*/)
+		for(int i = 0;i < MemoryBPs.size();i++)
 		{
-			bExists = true;
-			break;
+			if(MemoryBPs[i].dwOffset == breakpointOffset)
+			{
+				bExists = true;
+				break;
+			}
 		}
-	}
-	for(int i = 0;i < HardwareBPs.size();i++)
-	{
-		if(HardwareBPs[i].dwOffset == breakpointOffset /* && HardwareBPs[i].dwPID == dwPID */)
+		for(int i = 0;i < HardwareBPs.size();i++)
 		{
-			bExists = true;
-			break;
+			if(HardwareBPs[i].dwOffset == breakpointOffset)
+			{
+				bExists = true;
+				break;
+			}
 		}
 	}
 
@@ -263,13 +270,16 @@ bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, D
 				newBP.dwDataType = breakpointDataType;
 				newBP.dwPID = processID;
 				newBP.moduleName = (PTCHAR)clsMemManager::CAlloc(MAX_PATH * sizeof(TCHAR));
+				if(newBP.moduleName == NULL) break;
 				ZeroMemory(newBP.moduleName,MAX_PATH * sizeof(TCHAR));
 
 				if(breakpointHandleType == BP_KEEP)
 					newBP.dwBaseOffset = clsHelperClass::CalcOffsetForModule(newBP.moduleName,newBP.dwOffset,newBP.dwPID);
 
-				SoftwareBPs.append(newBP);
-
+				{
+					QWriteLocker locker(&m_bpLock);
+					SoftwareBPs.append(newBP);
+				}
 				emit OnBreakpointAdded(newBP,SOFTWARE_BP);
 				bRetValue = true;
 
@@ -281,7 +291,7 @@ bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, D
 
 				if(!clsBreakpointMemory::wMemoryBP(processID, breakpointOffset, breakpointSize, typeFlag, &oldProtection))
 					break;
-				
+
 				newBP.dwOffset = breakpointOffset;
 				newBP.dwHandle = breakpointHandleType;
 				newBP.dwSize = breakpointSize;
@@ -289,12 +299,16 @@ bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, D
 				newBP.dwTypeFlag = typeFlag;
 				newBP.dwOldProtection = oldProtection;
 				newBP.moduleName = (PTCHAR)clsMemManager::CAlloc(MAX_PATH * sizeof(TCHAR));
+				if(newBP.moduleName == NULL) break;
 				ZeroMemory(newBP.moduleName,MAX_PATH * sizeof(TCHAR));
-				
+
 				if(breakpointHandleType == BP_KEEP)
 					newBP.dwBaseOffset = clsHelperClass::CalcOffsetForModule(newBP.moduleName, newBP.dwOffset, newBP.dwPID);
-				
-				MemoryBPs.append(newBP);
+
+				{
+					QWriteLocker locker(&m_bpLock);
+					MemoryBPs.append(newBP);
+				}
 				emit OnBreakpointAdded(newBP,MEMORY_BP);
 				bRetValue = true;
 
@@ -302,43 +316,50 @@ bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, D
 			}
 		case HARDWARE_BP:
 			{
-				if(HardwareBPs.size() == 4)
-					break;
-				
+				{
+					QReadLocker reader(&m_bpLock);
+					if(HardwareBPs.size() == 4)
+						break;
+				}
+
 				newBP.dwOffset = breakpointOffset;
 				newBP.dwHandle = breakpointHandleType;
 				newBP.dwSize = breakpointSize;
 				newBP.dwPID = processID;
 				newBP.dwTypeFlag = typeFlag;
 				newBP.moduleName = (PTCHAR)clsMemManager::CAlloc(MAX_PATH * sizeof(TCHAR));
+				if(newBP.moduleName == NULL) break;
 				ZeroMemory(newBP.moduleName,MAX_PATH * sizeof(TCHAR));
-			
+
 				if(breakpointHandleType == BP_KEEP)
 					newBP.dwBaseOffset = clsHelperClass::CalcOffsetForModule(newBP.moduleName, newBP.dwOffset, newBP.dwPID);
 
-				bool bSlot1 = false,bSlot2 = false,bSlot3 = false,bSlot4 = false;
-				for(int i = 0;i < HardwareBPs.size();i++)
 				{
-					switch(HardwareBPs[i].dwSlot)
+					QReadLocker reader(&m_bpLock);
+					bool bSlot1 = false,bSlot2 = false,bSlot3 = false,bSlot4 = false;
+					for(int i = 0;i < HardwareBPs.size();i++)
 					{
-					case 0:
-						bSlot1 = true;
-						break;
-					case 1:
-						bSlot2 = true;
-						break;
-					case 2:
-						bSlot3 = true;
-						break;
-					case 3:
-						bSlot4 = true;
-						break;
+						switch(HardwareBPs[i].dwSlot)
+						{
+						case 0:
+							bSlot1 = true;
+							break;
+						case 1:
+							bSlot2 = true;
+							break;
+						case 2:
+							bSlot3 = true;
+							break;
+						case 3:
+							bSlot4 = true;
+							break;
+						}
 					}
+					if(!bSlot4) newBP.dwSlot = 3;
+					else if(!bSlot3) newBP.dwSlot = 2;
+					else if(!bSlot2) newBP.dwSlot = 1;
+					else if(!bSlot1) newBP.dwSlot = 0;
 				}
-				if(!bSlot4) newBP.dwSlot = 3;
-				else if(!bSlot3) newBP.dwSlot = 2;
-				else if(!bSlot2) newBP.dwSlot = 1;
-				else if(!bSlot1) newBP.dwSlot = 0;
 
 				if(!clsBreakpointHardware::wHardwareBP(processID, breakpointOffset, breakpointSize, newBP.dwSlot, typeFlag))
 				{
@@ -346,7 +367,10 @@ bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, D
 					break;
 				}
 
-				HardwareBPs.append(newBP);
+				{
+					QWriteLocker locker(&m_bpLock);
+					HardwareBPs.append(newBP);
+				}
 				emit OnBreakpointAdded(newBP, HARDWARE_BP);
 				bRetValue = true;
 
@@ -399,6 +423,7 @@ void clsBreakpointManager::BreakpointRebase(BPStruct *pCurrentBP, int bpType, HA
 
 bool clsBreakpointManager::IsOffsetAnBP(quint64 Offset)
 {
+	QReadLocker locker(&pThis->m_bpLock);
 	for(int i = 0; i < pThis->SoftwareBPs.size(); i++)
 		if(pThis->SoftwareBPs[i].dwOffset == Offset && pThis->SoftwareBPs[i].dwHandle == BP_KEEP)
 			return true;
@@ -415,6 +440,7 @@ bool clsBreakpointManager::IsOffsetAnBP(quint64 Offset)
 
 void clsBreakpointManager::RemoveSBPFromMemory(bool isDisable, DWORD processID)
 {
+	QReadLocker locker(&pThis->m_bpLock);
 	if(isDisable)
 	{
 		for (QList<BPStruct>::iterator it = pThis->SoftwareBPs.begin();it != pThis->SoftwareBPs.end(); ++it)
@@ -445,6 +471,7 @@ bool clsBreakpointManager::BreakpointDelete(DWORD64 breakpointOffset, DWORD brea
 
 void clsBreakpointManager::BreakpointCleanup()
 {
+	QWriteLocker locker(&m_bpLock);
 	for(QList<BPStruct>::iterator it = SoftwareBPs.begin(); it != SoftwareBPs.end(); ++it)
 	{
 		if(it->dwHandle != BP_KEEP)
@@ -463,6 +490,7 @@ void clsBreakpointManager::BreakpointCleanup()
 
 bool clsBreakpointManager::BreakpointFind(DWORD64 breakpointOffset, int breakpointType, DWORD processID, bool takeAll, BPStruct** pBreakpointSearched)
 {
+	QReadLocker locker(&m_bpLock);
 	DWORD tempSearchPID = processID;
 	BPStruct *pTempBP;
 
@@ -531,6 +559,7 @@ void clsBreakpointManager::BreakpointInsertFromProjectFile(BPStruct newBreakpoin
 {
 	if(pThis == NULL) return;
 
+	QWriteLocker locker(&pThis->m_bpLock);
 	switch(bpType)
 	{
 	case SOFTWARE_BP: 

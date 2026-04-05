@@ -23,7 +23,8 @@ UUpdatesModel::UUpdatesModel(QObject *parent) :
     m_headerData    << QString::fromUtf8("Status")
                     << QString::fromUtf8("Size")
                     << QString::fromUtf8("Target File")
-                    << QString::fromUtf8("URI");
+                    << QString::fromUtf8("URI")
+                    << QString::fromUtf8("SHA256");
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,6 +53,9 @@ QVariant UUpdatesModel::data(const QModelIndex &index, int role) const
         if (index.column() == eURI) {
             return m_updates.at(index.row())->m_uri;
         }
+        if (index.column() == eSHA256) {
+            return m_updates.at(index.row())->m_sha256;
+        }
     }
 
     return QVariant();
@@ -69,6 +73,9 @@ bool UUpdatesModel::setData(const QModelIndex &index, const QVariant &value, int
         }
         if(index.column() == eURI){
             m_updates.at(index.row())->m_uri = value.toString();
+        }
+        if(index.column() == eSHA256){
+            m_updates.at(index.row())->m_sha256 = value.toString();
         }
 
         return true;

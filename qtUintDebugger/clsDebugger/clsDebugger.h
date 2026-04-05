@@ -19,13 +19,25 @@
 
 #include <Windows.h>
 #include <QtCore>
+#include <QReadWriteLock>
+#include <atomic>
 
 #include "../clsBreakpointManager.h"
 #include "../clsPEManager.h"
 
 #define LOGBUFFER (512 * sizeof(TCHAR))
 #define LOGBUFFERCHAR (512)
-#define THREAD_GETSET_CONTEXT	(0x0018) 
+#define THREAD_GETSET_CONTEXT	(0x0018)
+
+// WOW64 equivalents of EXCEPTION_BREAKPOINT / EXCEPTION_SINGLE_STEP.
+// Windows raises these codes when a 32-bit process hits a breakpoint or
+// single-step while running inside a 64-bit host (WOW64 layer).
+#ifndef STATUS_WX86_BREAKPOINT
+#  define STATUS_WX86_BREAKPOINT  0x4000001FL
+#endif
+#ifndef STATUS_WX86_SINGLE_STEP
+#  define STATUS_WX86_SINGLE_STEP 0x4000001EL
+#endif
 
 struct clsDebuggerSettings
 {
@@ -128,6 +140,10 @@ class clsDebugger : public QThread
 	Q_OBJECT
 
 public:
+	// State lock: take a write lock (lockForWrite) when modifying DLLs/TIDs/PIDs/ExceptionHandler,
+	// and a read lock (lockForRead) when iterating them from any thread other than the debug thread.
+	QReadWriteLock m_stateLock;
+
 	QVector<DLLStruct> DLLs;
 	QVector<ThreadStruct> TIDs;
 	QVector<PIDStruct> PIDs;
@@ -136,6 +152,8 @@ public:
 	CONTEXT ProcessContext;
 	WOW64_CONTEXT wowProcessContext;
 
+	// Settings lock: take before reading or writing dbgSettings from any thread.
+	QReadWriteLock m_settingsLock;
 	clsDebuggerSettings dbgSettings;
 
 	clsDebugger();
@@ -205,19 +223,25 @@ private:
 	STARTUPINFO _si;
 	PROCESS_INFORMATION _pi;
 	PROCESS_INFORMATION m_dbgPI;
-	bool m_isDebugging;
-	bool m_normalDebugging;
-	bool m_stopDebugging;
-	bool m_singleStepFlag;
-	bool m_debuggerBreak;
-	HANDLE m_debugEvent;
-	HANDLE m_currentProcess;
-	HANDLE m_waitForGUI;
+
+	// These flags are accessed from both the debug thread and the UI thread;
+	// std::atomic provides the required visibility and prevents data races.
+	std::atomic<bool>   m_isDebugging;
+	std::atomic<bool>   m_stopDebugging;
+	std::atomic<bool>   m_singleStepFlag;
+	std::atomic<bool>   m_debuggerBreak;
+	std::atomic<int>    m_continueWithException;
+	std::atomic<DWORD>  m_currentPID;
+	std::atomic<DWORD>  m_currentTID;
+	std::atomic<HANDLE> m_currentProcess;
+
+	// m_normalDebugging and m_attachPID are only written before QThread::start(),
+	// so the happens-before guarantee of start() makes them safe as plain types.
+	bool  m_normalDebugging;
 	DWORD m_attachPID;
-	DWORD m_currentPID;
-	DWORD m_currentTID;
-	 
-	int m_continueWithException;
+
+	HANDLE m_debugEvent;
+	HANDLE m_waitForGUI;
 
 	void DebuggingLoop();
 	void AttachedDebugging();

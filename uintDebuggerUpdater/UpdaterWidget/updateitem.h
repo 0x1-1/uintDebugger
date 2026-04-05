@@ -27,6 +27,7 @@ public:
     QString m_size; // f.e.: 500 Kb
     QString m_package;
     QString m_uri;
+    QString m_sha256; // expected hex-encoded SHA-256 of the downloaded file
 };
 
 #endif // UPDATEITEM_H

@@ -31,6 +31,7 @@ public:
         eSIZE,
         ePACKAGE,
         eURI,
+        eSHA256,
         eMAX_COLUMN
     };
 

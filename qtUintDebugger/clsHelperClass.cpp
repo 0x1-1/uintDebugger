@@ -38,14 +38,20 @@ clsHelperClass::~clsHelperClass()
 
 bool clsHelperClass::LoadSymbolForAddr(QString &functionName, QString &moduleName, quint64 symbolOffset, HANDLE processHandle)
 {
-	bool bTest = false;
+	if(processHandle == NULL || processHandle == INVALID_HANDLE_VALUE)
+	{
+		functionName.clear();
+		moduleName.clear();
+		return false;
+	}
+
 	IMAGEHLP_MODULEW64 imgMod = {0};
 	imgMod.SizeOfStruct = sizeof(IMAGEHLP_MODULEW64);
 	PSYMBOL_INFOW pSymbol = (PSYMBOL_INFOW)malloc(sizeof(SYMBOL_INFOW) + MAX_PATH * 2);
 	memset(pSymbol, 0, sizeof(SYMBOL_INFOW) + MAX_PATH * 2);
 	pSymbol->SizeOfStruct = sizeof(SYMBOL_INFOW);
 	pSymbol->MaxNameLen = MAX_PATH;
-	quint64 dwDisplacement;
+	quint64 dwDisplacement = 0;
 
 	SymGetModuleInfoW64(processHandle, symbolOffset, &imgMod);
 	SymFromAddrW(processHandle, symbolOffset, &dwDisplacement, pSymbol);
