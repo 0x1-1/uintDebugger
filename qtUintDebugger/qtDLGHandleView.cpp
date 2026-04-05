@@ -61,14 +61,17 @@ qtDLGHandleView::qtDLGHandleView(QWidget *parent, Qt::WindowFlags flags,qint32 p
 
 	qtDLGUintDebugger *myMainWindow = qtDLGUintDebugger::GetInstance();
 
-	m_processCountEnd = myMainWindow->coreDebugger->PIDs.size();
-	for(int i = 0; i < myMainWindow->coreDebugger->PIDs.size(); i++)
 	{
-		if(myMainWindow->coreDebugger->PIDs[i].dwPID == m_processID)
+		QReadLocker locker(&myMainWindow->coreDebugger->m_stateLock);
+		m_processCountEnd = myMainWindow->coreDebugger->PIDs.size();
+		for(int i = 0; i < myMainWindow->coreDebugger->PIDs.size(); i++)
 		{
-			m_processCountEntry = i;
-			m_processCountEnd = i + 1;
-			break;
+			if(myMainWindow->coreDebugger->PIDs[i].dwPID == m_processID)
+			{
+				m_processCountEntry = i;
+				m_processCountEnd = i + 1;
+				break;
+			}
 		}
 	}
 
@@ -108,8 +111,14 @@ void qtDLGHandleView::OnDisplayHandles()
 	{
 		NTSTATUS status;
 		ULONG handleInfoSize = 0x10000;
-		DWORD dwPID = myMainWindow->coreDebugger->PIDs[i].dwPID;
-		HANDLE hProc = myMainWindow->coreDebugger->PIDs[i].hProc;
+		DWORD dwPID;
+		HANDLE hProc;
+		{
+			QReadLocker locker(&myMainWindow->coreDebugger->m_stateLock);
+			if(i >= myMainWindow->coreDebugger->PIDs.size()) break;
+			dwPID = myMainWindow->coreDebugger->PIDs[i].dwPID;
+			hProc = myMainWindow->coreDebugger->PIDs[i].hProc;
+		}
 
 		PSYSTEM_HANDLE_INFORMATION handleInfo = (PSYSTEM_HANDLE_INFORMATION)malloc(handleInfoSize);
 

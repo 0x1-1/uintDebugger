@@ -52,6 +52,12 @@ public:
 	QList<BPStruct> MemoryBPs;
 	QList<BPStruct> HardwareBPs;
 
+	// Lock protecting SoftwareBPs, MemoryBPs, HardwareBPs.
+	// Public so the debug loop can take a read lock while iterating them.
+	// Take write lock for structural mutations (append/remove);
+	// read lock for iteration without structural change.
+	QReadWriteLock m_bpLock;
+
 	clsBreakpointManager();
 	~clsBreakpointManager();
 
@@ -78,11 +84,7 @@ signals:
 	void OnBreakpointDeleted(quint64 bpOffset);
 
 private:
-	static clsBreakpointManager *pThis;
-
-	// Protects SoftwareBPs, MemoryBPs, HardwareBPs. Take write lock for
-	// structural mutations (append/remove); read lock for iteration.
-	QReadWriteLock m_bpLock;
+	static clsBreakpointManager *s_instance;
 
 	void BreakpointRebase(BPStruct *pCurrentBP, int bpType, HANDLE processHandle, DWORD processID);
 	// Lock-free remove used internally by BreakpointClear/BreakpointRemove (caller holds write lock).

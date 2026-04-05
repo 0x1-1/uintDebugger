@@ -58,15 +58,17 @@ qtDLGWindowView::qtDLGWindowView(QWidget *parent, Qt::WindowFlags flags,qint32 p
 
 	// Display
 	m_pMainWindow = qtDLGUintDebugger::GetInstance();
-	m_processCountEnd = m_pMainWindow->coreDebugger->PIDs.size();
-
-	for(int i = 0; i < m_pMainWindow->coreDebugger->PIDs.size(); i++)
 	{
-		if(m_pMainWindow->coreDebugger->PIDs[i].dwPID == m_processID)
+		QReadLocker locker(&m_pMainWindow->coreDebugger->m_stateLock);
+		m_processCountEnd = m_pMainWindow->coreDebugger->PIDs.size();
+		for(int i = 0; i < m_pMainWindow->coreDebugger->PIDs.size(); i++)
 		{
-			m_processCountEntry = i;
-			m_processCountEnd = i + 1;
-			break;
+			if(m_pMainWindow->coreDebugger->PIDs[i].dwPID == m_processID)
+			{
+				m_processCountEntry = i;
+				m_processCountEnd = i + 1;
+				break;
+			}
 		}
 	}
 
@@ -89,7 +91,13 @@ void qtDLGWindowView::EnumWindow()
 
 	for(int i = m_processCountEntry; i < m_processCountEnd;i++)
 	{
-		EnumWindows((WNDENUMPROC)EnumWindowCallBack,(LPARAM)m_pMainWindow->coreDebugger->PIDs[i].dwPID);
+		DWORD pid;
+		{
+			QReadLocker locker(&m_pMainWindow->coreDebugger->m_stateLock);
+			if(i >= m_pMainWindow->coreDebugger->PIDs.size()) break;
+			pid = m_pMainWindow->coreDebugger->PIDs[i].dwPID;
+		}
+		EnumWindows((WNDENUMPROC)EnumWindowCallBack,(LPARAM)pid);
 	}
 
 	if(tblWindowView->rowCount() <= 0)

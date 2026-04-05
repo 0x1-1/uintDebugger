@@ -60,14 +60,17 @@ qtDLGProcessPrivilege::qtDLGProcessPrivilege(QWidget *parent, Qt::WindowFlags fl
 	// Display
 	m_pMainWindow = qtDLGUintDebugger::GetInstance();
 
-	m_processLoopEnd = m_pMainWindow->coreDebugger->PIDs.size();
-	for(int i = 0; i < m_pMainWindow->coreDebugger->PIDs.size(); i++)
 	{
-		if(m_pMainWindow->coreDebugger->PIDs[i].dwPID == m_processID)
+		QReadLocker locker(&m_pMainWindow->coreDebugger->m_stateLock);
+		m_processLoopEnd = m_pMainWindow->coreDebugger->PIDs.size();
+		for(int i = 0; i < m_pMainWindow->coreDebugger->PIDs.size(); i++)
 		{
-			m_processLoopEntry = i;
-			m_processLoopEnd = i + 1;
-			break;
+			if(m_pMainWindow->coreDebugger->PIDs[i].dwPID == m_processID)
+			{
+				m_processLoopEntry = i;
+				m_processLoopEnd = i + 1;
+				break;
+			}
 		}
 	}
 
@@ -87,8 +90,13 @@ void qtDLGProcessPrivilege::DisplayPrivileges()
 
 	for(int i = m_processLoopEntry; i < m_processLoopEnd;i++)
 	{
-		HANDLE	hProcess	= m_pMainWindow->coreDebugger->PIDs[i].hProc,
-				hToken		= NULL;
+		HANDLE hProcess;
+		{
+			QReadLocker locker(&m_pMainWindow->coreDebugger->m_stateLock);
+			if(i >= m_pMainWindow->coreDebugger->PIDs.size()) break;
+			hProcess = m_pMainWindow->coreDebugger->PIDs[i].hProc;
+		}
+		HANDLE hToken = NULL;
 		
 		if(!OpenProcessToken(hProcess, TOKEN_READ, &hToken))
 		{
@@ -117,7 +125,11 @@ void qtDLGProcessPrivilege::DisplayPrivileges()
 
 		PTCHAR pPrivilegeName = (PTCHAR)clsMemManager::CAlloc(MAX_PATH * sizeof(TCHAR));
 		DWORD nameSize = NULL;
-		int	PID	= m_pMainWindow->coreDebugger->PIDs[i].dwPID;
+		int PID;
+		{
+			QReadLocker locker(&m_pMainWindow->coreDebugger->m_stateLock);
+			PID = (i < m_pMainWindow->coreDebugger->PIDs.size()) ? (int)m_pMainWindow->coreDebugger->PIDs[i].dwPID : 0;
+		}
 		
 		for(DWORD i = 0; i < pTokenBuffer->PrivilegeCount; i++)
 		{

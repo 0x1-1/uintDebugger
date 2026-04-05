@@ -65,14 +65,17 @@ qtDLGMemoryView::qtDLGMemoryView(QWidget *parent, Qt::WindowFlags flags,qint32 p
 	// Display
 	m_pMainWindow = qtDLGUintDebugger::GetInstance();
 
-	m_processCountEnd = m_pMainWindow->coreDebugger->PIDs.size();
-	for(int i = 0; i < m_pMainWindow->coreDebugger->PIDs.size(); i++)
 	{
-		if(m_pMainWindow->coreDebugger->PIDs[i].dwPID == m_processID)
+		QReadLocker locker(&m_pMainWindow->coreDebugger->m_stateLock);
+		m_processCountEnd = m_pMainWindow->coreDebugger->PIDs.size();
+		for(int i = 0; i < m_pMainWindow->coreDebugger->PIDs.size(); i++)
 		{
-			m_processCountEntry = i;
-			m_processCountEnd = i + 1;
-			break;
+			if(m_pMainWindow->coreDebugger->PIDs[i].dwPID == m_processID)
+			{
+				m_processCountEntry = i;
+				m_processCountEnd = i + 1;
+				break;
+			}
 		}
 	}
 	
@@ -260,14 +263,23 @@ void qtDLGMemoryView::DisplayMemory()
 	tblMemoryView->setRowCount(0);
 	for(int i = m_processCountEntry; i < m_processCountEnd;i++)
 	{
+		HANDLE hProc;
+		DWORD  dwPID;
+		{
+			QReadLocker locker(&m_pMainWindow->coreDebugger->m_stateLock);
+			if(i >= m_pMainWindow->coreDebugger->PIDs.size()) break;
+			hProc = m_pMainWindow->coreDebugger->PIDs[i].hProc;
+			dwPID = m_pMainWindow->coreDebugger->PIDs[i].dwPID;
+		}
+
 		quint64 dwAddress = NULL;
-		while(VirtualQueryEx(m_pMainWindow->coreDebugger->PIDs[i].hProc,(LPVOID)dwAddress,&mbi,sizeof(mbi)))
+		while(VirtualQueryEx(hProc,(LPVOID)dwAddress,&mbi,sizeof(mbi)))
 		{
 			tblMemoryView->insertRow(tblMemoryView->rowCount());
 
 			// PID
 			tblMemoryView->setItem(tblMemoryView->rowCount() -1,0,
-				new QTableWidgetItem(QString::asprintf("%08X",m_pMainWindow->coreDebugger->PIDs[i].dwPID)));
+				new QTableWidgetItem(QString::asprintf("%08X",dwPID)));
 			
 
 			// Base Address
@@ -291,7 +303,7 @@ void qtDLGMemoryView::DisplayMemory()
 			memset(sTemp,0,MAX_PATH * sizeof(TCHAR));
 			memset(sTemp2,0,MAX_PATH * sizeof(TCHAR));
 
-			iModLen = GetMappedFileName(m_pMainWindow->coreDebugger->PIDs[i].hProc,(LPVOID)dwAddress,sTemp2,MAX_PATH);
+			iModLen = GetMappedFileName(hProc,(LPVOID)dwAddress,sTemp2,MAX_PATH);
 			if(iModLen > 0)
 			{
 				for(size_t i = iModLen; i > 0 ; i--)

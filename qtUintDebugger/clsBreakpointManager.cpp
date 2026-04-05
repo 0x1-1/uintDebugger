@@ -20,11 +20,11 @@
 #include "clsBreakpointManager.h"
 #include "clsHelperClass.h"
 
-clsBreakpointManager* clsBreakpointManager::pThis = NULL;
+clsBreakpointManager* clsBreakpointManager::s_instance = NULL;
 
 clsBreakpointManager::clsBreakpointManager()
 {
-	pThis = this;
+	s_instance = this;
 }
 
 clsBreakpointManager::~clsBreakpointManager()
@@ -45,12 +45,12 @@ clsBreakpointManager::~clsBreakpointManager()
 	HardwareBPs.clear();
 	MemoryBPs.clear();
 
-	pThis = NULL;
+	s_instance = NULL;
 }
 
 clsBreakpointManager* clsBreakpointManager::GetInstance()
 {
-	return pThis;
+	return s_instance;
 }
 
 bool clsBreakpointManager::BreakpointInit(DWORD newProcessID, bool isThread)
@@ -423,27 +423,29 @@ void clsBreakpointManager::BreakpointRebase(BPStruct *pCurrentBP, int bpType, HA
 
 bool clsBreakpointManager::IsOffsetAnBP(quint64 Offset)
 {
-	QReadLocker locker(&pThis->m_bpLock);
-	for(int i = 0; i < pThis->SoftwareBPs.size(); i++)
-		if(pThis->SoftwareBPs[i].dwOffset == Offset && pThis->SoftwareBPs[i].dwHandle == BP_KEEP)
+	if(s_instance == NULL) return false;
+	QReadLocker locker(&s_instance->m_bpLock);
+	for(int i = 0; i < s_instance->SoftwareBPs.size(); i++)
+		if(s_instance->SoftwareBPs[i].dwOffset == Offset && s_instance->SoftwareBPs[i].dwHandle == BP_KEEP)
 			return true;
 
-	for(int i = 0; i < pThis->MemoryBPs.size(); i++)
-		if(pThis->MemoryBPs[i].dwOffset == Offset)
+	for(int i = 0; i < s_instance->MemoryBPs.size(); i++)
+		if(s_instance->MemoryBPs[i].dwOffset == Offset)
 			return true;
 
-	for(int i = 0; i < pThis->HardwareBPs.size(); i++)
-		if(pThis->HardwareBPs[i].dwOffset == Offset)
+	for(int i = 0; i < s_instance->HardwareBPs.size(); i++)
+		if(s_instance->HardwareBPs[i].dwOffset == Offset)
 			return true;
 	return false;
 }
 
 void clsBreakpointManager::RemoveSBPFromMemory(bool isDisable, DWORD processID)
 {
-	QReadLocker locker(&pThis->m_bpLock);
+	if(s_instance == NULL) return;
+	QReadLocker locker(&s_instance->m_bpLock);
 	if(isDisable)
 	{
-		for (QList<BPStruct>::iterator it = pThis->SoftwareBPs.begin();it != pThis->SoftwareBPs.end(); ++it)
+		for (QList<BPStruct>::iterator it = s_instance->SoftwareBPs.begin();it != s_instance->SoftwareBPs.end(); ++it)
 		{
 			if((it->dwPID == processID || it->dwPID == -1) && it->bRestoreBP == false)
 				clsBreakpointSoftware::dSoftwareBP(it->dwPID, it->dwOffset, it->dwSize, it->bOrgByte);
@@ -451,7 +453,7 @@ void clsBreakpointManager::RemoveSBPFromMemory(bool isDisable, DWORD processID)
 	}
 	else
 	{
-		for (QList<BPStruct>::iterator it = pThis->SoftwareBPs.begin();it != pThis->SoftwareBPs.end(); ++it)
+		for (QList<BPStruct>::iterator it = s_instance->SoftwareBPs.begin();it != s_instance->SoftwareBPs.end(); ++it)
 		{
 			if((it->dwPID == processID || it->dwPID == -1) && it->bRestoreBP == false)
 				clsBreakpointSoftware::wSoftwareBP(it->dwPID, it->dwOffset, it->dwSize, &it->bOrgByte, it->dwDataType);
@@ -461,12 +463,14 @@ void clsBreakpointManager::RemoveSBPFromMemory(bool isDisable, DWORD processID)
 
 bool clsBreakpointManager::BreakpointInsert(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType)
 {
-	return pThis->BreakpointAdd(breakpointType, typeFlag, processID, breakpointOffset, breakpointSize, breakpointHandleType, breakpointDataType);
+	if(s_instance == NULL) return false;
+	return s_instance->BreakpointAdd(breakpointType, typeFlag, processID, breakpointOffset, breakpointSize, breakpointHandleType, breakpointDataType);
 }
 
 bool clsBreakpointManager::BreakpointDelete(DWORD64 breakpointOffset, DWORD breakpointType)
 {
-	return pThis->BreakpointRemove(breakpointOffset, breakpointType);
+	if(s_instance == NULL) return false;
+	return s_instance->BreakpointRemove(breakpointOffset, breakpointType);
 }
 
 void clsBreakpointManager::BreakpointCleanup()
@@ -557,24 +561,24 @@ bool clsBreakpointManager::BreakpointFind(DWORD64 breakpointOffset, int breakpoi
 
 void clsBreakpointManager::BreakpointInsertFromProjectFile(BPStruct newBreakpoint, int bpType)
 {
-	if(pThis == NULL) return;
+	if(s_instance == NULL) return;
 
-	QWriteLocker locker(&pThis->m_bpLock);
+	QWriteLocker locker(&s_instance->m_bpLock);
 	switch(bpType)
 	{
-	case SOFTWARE_BP: 
+	case SOFTWARE_BP:
 		{
-			pThis->SoftwareBPs.append(newBreakpoint);
+			s_instance->SoftwareBPs.append(newBreakpoint);
 			break;
 		}
 	case HARDWARE_BP:
 		{
-			pThis->HardwareBPs.append(newBreakpoint);
+			s_instance->HardwareBPs.append(newBreakpoint);
 			break;
 		}
 	case MEMORY_BP:
 		{
-			pThis->MemoryBPs.append(newBreakpoint);
+			s_instance->MemoryBPs.append(newBreakpoint);
 			break;
 		}
 	default: return;

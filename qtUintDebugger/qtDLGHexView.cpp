@@ -58,12 +58,15 @@ qtDLGHexView::qtDLGHexView(QWidget *parent, Qt::WindowFlags flags,unsigned long 
 	SetPlaceholderRow(tblHexView, QStringLiteral("Reading memory..."));
 
 	HANDLE hProcess = NULL;
-	for(int i = 0;i < MyMainWindow->coreDebugger->PIDs.size();i++)
 	{
-		if(dwPID == MyMainWindow->coreDebugger->PIDs[i].dwPID)
+		QReadLocker locker(&MyMainWindow->coreDebugger->m_stateLock);
+		for(int i = 0;i < MyMainWindow->coreDebugger->PIDs.size();i++)
 		{
-			hProcess = MyMainWindow->coreDebugger->PIDs[i].hProc;
-			break;
+			if(dwPID == MyMainWindow->coreDebugger->PIDs[i].dwPID)
+			{
+				hProcess = MyMainWindow->coreDebugger->PIDs[i].hProc;
+				break;
+			}
 		}
 	}
 

@@ -60,26 +60,27 @@ qtDLGFunctions::qtDLGFunctions(qint32 processID, QWidget *parent, Qt::WindowFlag
 
 	qtDLGUintDebugger *myMainWindow = qtDLGUintDebugger::GetInstance();
 
-	int	iForEntry = 0,
-		iForEnd = myMainWindow->coreDebugger->PIDs.size();
-
-	for(int i = 0; i < myMainWindow->coreDebugger->PIDs.size(); i++)
-	{
-		if(myMainWindow->coreDebugger->PIDs[i].dwPID == m_processID)
-		{
-			iForEntry = i;
-			iForEnd = i + 1;
-			break;
-		}
-	}
-
 	QList<FunctionProcessingData> dataForProcessing;
-	for(int i = iForEntry; i < iForEnd;i++)
 	{
-		FunctionProcessingData newData;
-		newData.currentModule = (PTCHAR)myMainWindow->coreDebugger->PIDs[i].sFileName;
-		newData.processHandle = myMainWindow->coreDebugger->PIDs[i].hProc;
-		dataForProcessing.append(newData);
+		QReadLocker locker(&myMainWindow->coreDebugger->m_stateLock);
+		int iForEntry = 0;
+		int iForEnd   = myMainWindow->coreDebugger->PIDs.size();
+		for(int i = 0; i < myMainWindow->coreDebugger->PIDs.size(); i++)
+		{
+			if(myMainWindow->coreDebugger->PIDs[i].dwPID == (DWORD)m_processID)
+			{
+				iForEntry = i;
+				iForEnd   = i + 1;
+				break;
+			}
+		}
+		for(int i = iForEntry; i < iForEnd; i++)
+		{
+			FunctionProcessingData newData;
+			newData.currentModule = (PTCHAR)myMainWindow->coreDebugger->PIDs[i].sFileName;
+			newData.processHandle = myMainWindow->coreDebugger->PIDs[i].hProc;
+			dataForProcessing.append(newData);
+		}
 	}
 	
 	m_pFunctionWorker = new clsFunctionsViewWorker(dataForProcessing);

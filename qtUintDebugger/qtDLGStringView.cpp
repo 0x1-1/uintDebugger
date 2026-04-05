@@ -58,15 +58,17 @@ qtDLGStringView::qtDLGStringView(QWidget *parent, Qt::WindowFlags flags, qint32 
 	m_maxRows = (tblStringView->verticalHeader()->height() / 15) - 1;
 
 	m_forEntry = 0;
-	m_forEnd = m_pMainWindow->coreDebugger->PIDs.size();
-
-	for(int i = 0; i < m_pMainWindow->coreDebugger->PIDs.size(); i++)
 	{
-		if(m_pMainWindow->coreDebugger->PIDs[i].dwPID == m_processID)
+		QReadLocker locker(&m_pMainWindow->coreDebugger->m_stateLock);
+		m_forEnd = m_pMainWindow->coreDebugger->PIDs.size();
+		for(int i = 0; i < m_pMainWindow->coreDebugger->PIDs.size(); i++)
 		{
-			m_forEntry = i;
-			m_forEnd = i + 1;
-			break;
+			if(m_pMainWindow->coreDebugger->PIDs[i].dwPID == m_processID)
+			{
+				m_forEntry = i;
+				m_forEnd = i + 1;
+				break;
+			}
 		}
 	}
 	
@@ -93,13 +95,15 @@ void qtDLGStringView::DataProcessing()
 	QList<StringProcessingData> dataForProcessing;
 	StringProcessingData newData;
 	
-	for(int i = m_forEntry; i < m_forEnd; i++)
 	{
-		newData.filePath = m_pMainWindow->coreDebugger->PIDs[m_forEntry].sFileName;
-		newData.processID = m_pMainWindow->coreDebugger->PIDs[m_forEntry].dwPID;
-		//newData.processHandle = m_pMainWindow->coreDebugger->PIDs[m_forEntry].hProc;
-
-		dataForProcessing.append(newData);
+		QReadLocker locker(&m_pMainWindow->coreDebugger->m_stateLock);
+		for(int i = m_forEntry; i < m_forEnd; i++)
+		{
+			if(i >= m_pMainWindow->coreDebugger->PIDs.size()) break;
+			newData.filePath  = m_pMainWindow->coreDebugger->PIDs[i].sFileName;
+			newData.processID = m_pMainWindow->coreDebugger->PIDs[i].dwPID;
+			dataForProcessing.append(newData);
+		}
 	}
 
 	if(m_pStringProcessor != NULL)

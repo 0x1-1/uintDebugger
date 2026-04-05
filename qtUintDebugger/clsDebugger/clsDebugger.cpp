@@ -30,7 +30,7 @@
 
 #pragma comment(lib,"psapi.lib")
 
-clsDebugger* clsDebugger::pThis = NULL;
+clsDebugger* clsDebugger::s_instance = NULL;
 
 clsDebugger::clsDebugger() :
 	m_normalDebugging(true),
@@ -46,7 +46,7 @@ clsDebugger::clsDebugger() :
 	m_commandLine("")
 {
 	setObjectName(QStringLiteral("clsDebugger"));
-	pThis = this;
+	s_instance = this;
 
 	m_pPEManager			= clsPEManager::GetInstance();
 	m_pBreakpointManager	= clsBreakpointManager::GetInstance();
@@ -620,70 +620,64 @@ void clsDebugger::DebuggingLoop()
 
 						if(pCurrentPID->dwBPRestoreFlag == RESTORE_BP_SOFTWARE) // Restore SoftwareBP
 						{
-							BPStruct *pCurrentBP = NULL;
-							int countSoftwareBP = m_pBreakpointManager->SoftwareBPs.size();
-
-							for(int i = 0; i < countSoftwareBP; i++)
 							{
-								pCurrentBP = &m_pBreakpointManager->SoftwareBPs[i];
-
-								if(pCurrentBP->bRestoreBP &&
-									pCurrentBP->dwHandle == BP_KEEP &&
-									(pCurrentBP->dwPID == debug_event.dwProcessId || pCurrentBP->dwPID == -1))
+								QWriteLocker bpLocker(&m_pBreakpointManager->m_bpLock);
+								const int countSoftwareBP = m_pBreakpointManager->SoftwareBPs.size();
+								for(int i = 0; i < countSoftwareBP; i++)
 								{
-									clsBreakpointSoftware::wSoftwareBP(pCurrentBP->dwPID, pCurrentBP->dwOffset, pCurrentBP->dwSize, &pCurrentBP->bOrgByte, pCurrentBP->dwDataType);
-									pCurrentBP->bRestoreBP = false;
-
-									break;
-								}									
+									BPStruct *pCurrentBP = &m_pBreakpointManager->SoftwareBPs[i];
+									if(pCurrentBP->bRestoreBP &&
+										pCurrentBP->dwHandle == BP_KEEP &&
+										(pCurrentBP->dwPID == debug_event.dwProcessId || pCurrentBP->dwPID == -1))
+									{
+										clsBreakpointSoftware::wSoftwareBP(pCurrentBP->dwPID, pCurrentBP->dwOffset, pCurrentBP->dwSize, &pCurrentBP->bOrgByte, pCurrentBP->dwDataType);
+										pCurrentBP->bRestoreBP = false;
+										break;
+									}
+								}
 							}
-
 							pCurrentPID->bTrapFlag = false;
 							pCurrentPID->dwBPRestoreFlag = RESTORE_NON;
 						}
 						else if(pCurrentPID->dwBPRestoreFlag == RESTORE_BP_MEMORY) // Restore MemBP
 						{
-							BPStruct *pCurrentBP = NULL;
-							int countMemoryBP = m_pBreakpointManager->MemoryBPs.size();
-
-							for(int i = 0; i < countMemoryBP; i++)
 							{
-								pCurrentBP = &m_pBreakpointManager->MemoryBPs[i];
-
-								if(pCurrentBP->bRestoreBP &&
-									pCurrentBP->dwHandle == BP_KEEP &&
-									(pCurrentBP->dwPID == debug_event.dwProcessId || pCurrentBP->dwPID == -1))
+								QWriteLocker bpLocker(&m_pBreakpointManager->m_bpLock);
+								const int countMemoryBP = m_pBreakpointManager->MemoryBPs.size();
+								for(int i = 0; i < countMemoryBP; i++)
 								{
-									clsBreakpointMemory::wMemoryBP(pCurrentBP->dwPID, pCurrentBP->dwOffset, pCurrentBP->dwSize, pCurrentBP->dwTypeFlag, &pCurrentBP->dwOldProtection);
-									pCurrentBP->bRestoreBP = false;
-
-									break;
-								}									
+									BPStruct *pCurrentBP = &m_pBreakpointManager->MemoryBPs[i];
+									if(pCurrentBP->bRestoreBP &&
+										pCurrentBP->dwHandle == BP_KEEP &&
+										(pCurrentBP->dwPID == debug_event.dwProcessId || pCurrentBP->dwPID == -1))
+									{
+										clsBreakpointMemory::wMemoryBP(pCurrentBP->dwPID, pCurrentBP->dwOffset, pCurrentBP->dwSize, pCurrentBP->dwTypeFlag, &pCurrentBP->dwOldProtection);
+										pCurrentBP->bRestoreBP = false;
+										break;
+									}
+								}
 							}
-
 							pCurrentPID->bTrapFlag = false;
 							pCurrentPID->dwBPRestoreFlag = RESTORE_NON;
 						}
 						else if(pCurrentPID->dwBPRestoreFlag == RESTORE_BP_HARDWARE) // Restore HwBp
 						{
-							BPStruct *pCurrentBP = NULL;
-							int countHardwareBP = m_pBreakpointManager->HardwareBPs.size();
-
-							for(int i = 0; i < countHardwareBP; i++)
 							{
-								pCurrentBP = &m_pBreakpointManager->HardwareBPs[i];
-
-								if(pCurrentBP->bRestoreBP &&
-									pCurrentBP->dwHandle == BP_KEEP &&
-									(pCurrentBP->dwPID == debug_event.dwProcessId || pCurrentBP->dwPID == -1))
+								QWriteLocker bpLocker(&m_pBreakpointManager->m_bpLock);
+								const int countHardwareBP = m_pBreakpointManager->HardwareBPs.size();
+								for(int i = 0; i < countHardwareBP; i++)
 								{
-									clsBreakpointHardware::wHardwareBP(debug_event.dwProcessId, pCurrentBP->dwOffset, pCurrentBP->dwSize, pCurrentBP->dwSlot, pCurrentBP->dwTypeFlag);
-									pCurrentBP->bRestoreBP = false;
-
-									break;
+									BPStruct *pCurrentBP = &m_pBreakpointManager->HardwareBPs[i];
+									if(pCurrentBP->bRestoreBP &&
+										pCurrentBP->dwHandle == BP_KEEP &&
+										(pCurrentBP->dwPID == debug_event.dwProcessId || pCurrentBP->dwPID == -1))
+									{
+										clsBreakpointHardware::wHardwareBP(debug_event.dwProcessId, pCurrentBP->dwOffset, pCurrentBP->dwSize, pCurrentBP->dwSlot, pCurrentBP->dwTypeFlag);
+										pCurrentBP->bRestoreBP = false;
+										break;
+									}
 								}
 							}
-
 							pCurrentPID->bTrapFlag = false;
 							pCurrentPID->dwBPRestoreFlag = RESTORE_NON;
 						}
@@ -768,19 +762,22 @@ void clsDebugger::DebuggingLoop()
 								pageBase = (DWORD64)mbi.BaseAddress;
 							}
 
-							for(int i = 0;i < m_pBreakpointManager->MemoryBPs.size(); i++)
 							{
-								if(m_pBreakpointManager->MemoryBPs[i].dwOffset <= (pageBase + pageSize) && m_pBreakpointManager->MemoryBPs[i].dwOffset >= pageBase)
+								QWriteLocker bpLocker(&m_pBreakpointManager->m_bpLock);
+								for(int i = 0;i < m_pBreakpointManager->MemoryBPs.size(); i++)
 								{
-									m_pBreakpointManager->MemoryBPs[i].bRestoreBP = true;
-
-									if(exInfo->ExceptionCode == EXCEPTION_ACCESS_VIOLATION)
+									if(m_pBreakpointManager->MemoryBPs[i].dwOffset <= (pageBase + pageSize) && m_pBreakpointManager->MemoryBPs[i].dwOffset >= pageBase)
 									{
-										DWORD currentProtection = NULL;
-										VirtualProtectEx(pCurrentPID->hProc, (LPVOID)exInfo->ExceptionAddress, m_pBreakpointManager->MemoryBPs[i].dwSize, m_pBreakpointManager->MemoryBPs[i].dwOldProtection, &currentProtection);
-									}
+										m_pBreakpointManager->MemoryBPs[i].bRestoreBP = true;
 
-									break;
+										if(exInfo->ExceptionCode == EXCEPTION_ACCESS_VIOLATION)
+										{
+											DWORD currentProtection = NULL;
+											VirtualProtectEx(pCurrentPID->hProc, (LPVOID)exInfo->ExceptionAddress, m_pBreakpointManager->MemoryBPs[i].dwSize, m_pBreakpointManager->MemoryBPs[i].dwOldProtection, &currentProtection);
+										}
+
+										break;
+									}
 								}
 							}
 						}
@@ -966,11 +963,14 @@ bool clsDebugger::CheckIfExceptionIsBP(PIDStruct *pCurrentPID, quint64 dwExcepti
 	{
 		return isExceptionRelevant;
 	}
-	else if(dwExceptionType == EXCEPTION_BREAKPOINT || dwExceptionType == STATUS_WX86_BREAKPOINT)
+
+	QReadLocker bpLocker(&m_pBreakpointManager->m_bpLock);
+
+	if(dwExceptionType == EXCEPTION_BREAKPOINT || dwExceptionType == STATUS_WX86_BREAKPOINT)
 	{
 		for(int i = 0;i < m_pBreakpointManager->SoftwareBPs.size();i++)
 			if(dwExceptionOffset == m_pBreakpointManager->SoftwareBPs[i].dwOffset && (m_pBreakpointManager->SoftwareBPs[i].dwPID == pCurrentPID->dwPID || m_pBreakpointManager->SoftwareBPs[i].dwPID == -1))
-				return true;		
+				return true;
 	}
 	else if(dwExceptionType == EXCEPTION_GUARD_PAGE || dwExceptionType == EXCEPTION_ACCESS_VIOLATION)
 	{
@@ -981,7 +981,7 @@ bool clsDebugger::CheckIfExceptionIsBP(PIDStruct *pCurrentPID, quint64 dwExcepti
 
 		if(VirtualQueryEx(pCurrentPID->hProc,(LPVOID)dwExceptionOffset,&mbi,sizeof(mbi)))
 		{
-			pageSize = mbi.RegionSize; 
+			pageSize = mbi.RegionSize;
 			pageBase = (DWORD64)mbi.BaseAddress;
 		}
 
@@ -1148,12 +1148,18 @@ void clsDebugger::HandleForException(int handleException)
 	SetEvent(m_waitForGUI);
 }
 
+clsDebugger* clsDebugger::GetInstance()
+{
+	return s_instance;
+}
+
 void clsDebugger::SetNewThreadContext(bool isWow64, CONTEXT newProcessContext, WOW64_CONTEXT newWowProcessContext)
 {
+	if(s_instance == NULL) return;
 	if(isWow64)
-		pThis->wowProcessContext = newWowProcessContext;
+		s_instance->wowProcessContext = newWowProcessContext;
 	else
-		pThis->ProcessContext = newProcessContext;
+		s_instance->ProcessContext = newProcessContext;
 }
 
 PIDStruct* clsDebugger::GetCurrentPIDDataPointer(DWORD processID)

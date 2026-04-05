@@ -278,10 +278,17 @@ void qtDLGUintDebugger::OnDebuggerBreak()
 
 void qtDLGUintDebugger::UpdateStateBar(int actionType, quint64 stepCount)
 {
+	int pidCount, tidCount, dllCount;
+	{
+		QReadLocker locker(&coreDebugger->m_stateLock);
+		pidCount = coreDebugger->PIDs.size();
+		tidCount = coreDebugger->TIDs.size();
+		dllCount = coreDebugger->DLLs.size();
+	}
 	QString qsStateMessage = QString::asprintf("\t\tPIDs: %d  TIDs: %d  DLLs: %d  Exceptions: %d State: ",
-		coreDebugger->PIDs.size(),
-		coreDebugger->TIDs.size(),
-		coreDebugger->DLLs.size(),
+		pidCount,
+		tidCount,
+		dllCount,
 		lExceptionCount);
 
 	switch(actionType)
@@ -375,11 +382,18 @@ void qtDLGUintDebugger::GenerateMenuCallback(QAction *qAction)
 void qtDLGUintDebugger::GenerateMenu(bool isAllEnabled)
 {
 	int activeProcessCount = 0;
-	
-	for(int i = 0; i < coreDebugger->PIDs.size(); i++)
+	QList<DWORD> runningPIDs;
+
 	{
-		if(coreDebugger->PIDs[i].bRunning)
-			activeProcessCount++;
+		QReadLocker locker(&coreDebugger->m_stateLock);
+		for(int i = 0; i < coreDebugger->PIDs.size(); i++)
+		{
+			if(coreDebugger->PIDs[i].bRunning)
+			{
+				activeProcessCount++;
+				runningPIDs.append(coreDebugger->PIDs[i].dwPID);
+			}
+		}
 	}
 
 	if(activeProcessCount > 1)
@@ -387,19 +401,15 @@ void qtDLGUintDebugger::GenerateMenu(bool isAllEnabled)
 		QAction *qAction;
 		QMenu menu;
 
-		for(int i = 0; i < coreDebugger->PIDs.size(); i++)
+		for(int i = 0; i < runningPIDs.size(); i++)
 		{
-			if(coreDebugger->PIDs[i].bRunning)
-			{
-				qAction = new QAction(QString::asprintf("%08X",coreDebugger->PIDs[i].dwPID),this);
-				menu.addAction(qAction);
-			}
+			qAction = new QAction(QString::asprintf("%08X", runningPIDs[i]),this);
+			menu.addAction(qAction);
 		}
-		
+
 		if(isAllEnabled)
 		{
 			menu.addSeparator();
-
 			qAction = new QAction("All",this);
 			menu.addAction(qAction);
 		}
@@ -407,9 +417,9 @@ void qtDLGUintDebugger::GenerateMenu(bool isAllEnabled)
 		connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(GenerateMenuCallback(QAction*)));
 		menu.exec(QCursor::pos());
 	}
-	else
+	else if(!runningPIDs.isEmpty())
 	{
-		m_iMenuProcessID = coreDebugger->PIDs[0].dwPID;
+		m_iMenuProcessID = runningPIDs[0];
 	}
 }
 

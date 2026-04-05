@@ -159,6 +159,8 @@ public:
 	clsDebugger();
 	~clsDebugger();
 
+	static clsDebugger* GetInstance();
+
 	static bool IsOffsetEIP(quint64 Offset);
 
 	static void SetNewThreadContext(bool isWow64, CONTEXT newProcessContext, WOW64_CONTEXT newWowProcessContext);
@@ -212,7 +214,7 @@ signals:
 	void UpdateOffsetsPatches(HANDLE hProc, int PID);
 
 private:
-	static clsDebugger *pThis;
+	static clsDebugger *s_instance;
 
 	clsBreakpointManager *m_pBreakpointManager;
 	clsPEManager *m_pPEManager;

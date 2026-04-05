@@ -421,12 +421,15 @@ void qtDLGUintDebugger::action_DebugRunToUserCode()
 			lpCurrentFileName = NULL;
 	bool	bWeGotIt = false;
 
-	for(int i = 0; i < coreDebugger->PIDs.size(); i++)
 	{
-		if(coreDebugger->PIDs[i].hProc == hProcess)
+		QReadLocker locker(&coreDebugger->m_stateLock);
+		for(int i = 0; i < coreDebugger->PIDs.size(); i++)
 		{
-			lpCurrentNameTemp = coreDebugger->PIDs[i].sFileName;
-			break;
+			if(coreDebugger->PIDs[i].hProc == hProcess)
+			{
+				lpCurrentNameTemp = coreDebugger->PIDs[i].sFileName;
+				break;
+			}
 		}
 	}
 

@@ -74,14 +74,17 @@ qtDLGHeapView::qtDLGHeapView(QWidget *parent, Qt::WindowFlags flags,int processI
 
 	m_pMainWindow = qtDLGUintDebugger::GetInstance();
 
-	m_processCountEnd = m_pMainWindow->coreDebugger->PIDs.size();
-	for(int i = 0; i < m_pMainWindow->coreDebugger->PIDs.size(); i++)
 	{
-		if(m_pMainWindow->coreDebugger->PIDs[i].dwPID == m_processID)
+		QReadLocker locker(&m_pMainWindow->coreDebugger->m_stateLock);
+		m_processCountEnd = m_pMainWindow->coreDebugger->PIDs.size();
+		for(int i = 0; i < m_pMainWindow->coreDebugger->PIDs.size(); i++)
 		{
-			m_processCountEntry = i;
-			m_processCountEnd = i + 1;
-			break;
+			if(m_pMainWindow->coreDebugger->PIDs[i].dwPID == m_processID)
+			{
+				m_processCountEntry = i;
+				m_processCountEnd = i + 1;
+				break;
+			}
 		}
 	}
 
@@ -207,7 +210,12 @@ void qtDLGHeapView::DisplayHeap()
 
 	for(int i = m_processCountEntry; i < m_processCountEnd; i++)
 	{
-		const DWORD processID = m_pMainWindow->coreDebugger->PIDs[i].dwPID;
+		DWORD processID;
+		{
+			QReadLocker locker(&m_pMainWindow->coreDebugger->m_stateLock);
+			if(i >= m_pMainWindow->coreDebugger->PIDs.size()) break;
+			processID = m_pMainWindow->coreDebugger->PIDs[i].dwPID;
+		}
 		HEAPLIST32 heapList = { 0 };
 		heapList.dwSize = sizeof(HEAPLIST32);
 		HANDLE hHeapSnap = CreateToolhelp32Snapshot(TH32CS_SNAPHEAPLIST, processID);

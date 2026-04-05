@@ -176,18 +176,20 @@ void clsDebugger::SetTarget(QString sTarget)
 
 DWORD clsDebugger::GetCurrentPID()
 {
-	if(pThis->IsDebuggerSuspended())
-		return pThis->m_currentPID;
+	if(s_instance == NULL) return 0;
+	if(s_instance->IsDebuggerSuspended())
+		return s_instance->m_currentPID;
 	else
-		return pThis->GetMainProcessID();
+		return s_instance->GetMainProcessID();
 }
 
 DWORD clsDebugger::GetCurrentTID()
 {
-	if(pThis->IsDebuggerSuspended())
-		return pThis->m_currentTID;
+	if(s_instance == NULL) return 0;
+	if(s_instance->IsDebuggerSuspended())
+		return s_instance->m_currentTID;
 	else
-		return pThis->GetMainThreadID();
+		return s_instance->GetMainThreadID();
 }
 
 void clsDebugger::SetCommandLine(QString CommandLine)
@@ -210,22 +212,23 @@ HANDLE clsDebugger::GetCurrentProcessHandle()
 
 HANDLE clsDebugger::GetProcessHandleByPID(DWORD PID)
 {
-	if(pThis != NULL)
-		return pThis->GetCurrentProcessHandle(PID);
+	if(s_instance != NULL)
+		return s_instance->GetCurrentProcessHandle(PID);
 
 	return NULL;
 }
 
 bool clsDebugger::IsOffsetEIP(quint64 Offset)
 {
+	if(s_instance == NULL) return false;
 #ifdef _AMD64_
-	if(pThis->wowProcessContext.Eip == Offset)
+	if(s_instance->wowProcessContext.Eip == Offset)
 		return true;
 
-	if(pThis->ProcessContext.Rip == Offset)
+	if(s_instance->ProcessContext.Rip == Offset)
 		return true;
 #else
-	if(pThis->ProcessContext.Eip == Offset)
+	if(s_instance->ProcessContext.Eip == Offset)
 		return true;
 #endif
 
