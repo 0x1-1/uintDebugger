@@ -283,9 +283,15 @@ void UUpdateWidget::slot_error(const QString &error)
 {
     qDebug() << __FUNCTION__ << ':' << error;
 
-    if (error == "Error URL" || error == "Error while downloading file") {
-        slot_downloadFileFinished();
-    }
+    // Abort the entire update on any download error.
+    // Silently skipping a failed file risks a partial/broken installation.
+    m_toolBarActions.at(eINSTALL_UPDATES_ACTION)->setEnabled(false);
+    m_toolBarActions.at(eCHECK_UPDATES_ACTION)->setEnabled(true);
+    m_stackedWidget->setCurrentIndex(0);
+    m_currentDownloadFile = -1;
+
+    QMessageBox::critical(this, tr("uintDebugger updater"),
+        tr("Download failed: %1\n\nThe update was cancelled. Please try again.").arg(error));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

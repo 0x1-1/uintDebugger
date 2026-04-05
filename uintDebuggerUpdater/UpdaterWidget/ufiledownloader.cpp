@@ -19,6 +19,7 @@
 
 #include <QNetworkRequest>
 #include <QNetworkReply>
+#include <QCoreApplication>
 #include <QFileInfo>
 #include <QProgressBar>
 #include <QDir>
@@ -61,7 +62,7 @@ QString UFileDownloader::saveFileName(const QUrl &url)
     QString basename = QFileInfo(path).fileName();
 
     if (m_pathDir.isEmpty() == false) {
-        basename = QDir::currentPath() + '/' + m_pathDir + '/' + basename;
+        basename = QCoreApplication::applicationDirPath() + '/' + m_pathDir + '/' + basename;
     }
 
     if (basename.isEmpty())
@@ -222,7 +223,8 @@ void UFileDownloader::slot_readFile()
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void UFileDownloader::slot_sslErrors(QNetworkReply *reply, QList<QSslError> errorList) {
-    qDebug()<<__FUNCTION__;
-
-    reply->ignoreSslErrors(errorList);
+    Q_UNUSED(reply)
+    Q_UNUSED(errorList)
+    // SSL errors are not suppressed — Qt's default validation applies.
+    // ignoreSslErrors() was intentionally removed to prevent MITM attacks on update downloads.
 }

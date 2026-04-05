@@ -88,6 +88,7 @@ bool clsBreakpointSoftware::dSoftwareBP(DWORD processID, DWORD64 breakpointOffse
 	clsMemoryProtector tempMemoryProtector(processHandle, PAGE_READWRITE, breakpointSize, breakpointOffset, &worked);
 	if(worked && WriteProcessMemory(processHandle, (LPVOID)breakpointOffset, (LPVOID)orgBreakpointData, breakpointSize, &bytesWritten))
 	{
+		FlushInstructionCache(processHandle, (LPVOID)breakpointOffset, breakpointSize);
 		return true;
 	}
 

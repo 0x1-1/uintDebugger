@@ -24,6 +24,7 @@
 
 #include "dbghelp.h"
 
+#include <QCoreApplication>
 #include <Psapi.h>
 #include <TlHelp32.h>
 
@@ -49,8 +50,8 @@ clsDebugger::clsDebugger() :
 
 	ZeroMemory(&dbgSettings, sizeof(clsDebuggerSettings));
 
-	m_waitForGUI = CreateEvent(NULL,false,false,L"hWaitForGUI");
-	m_debugEvent = CreateEvent(NULL,false,false,L"hDebugEvent");
+	m_waitForGUI = CreateEvent(NULL,false,false,NULL);
+	m_debugEvent = CreateEvent(NULL,false,false,NULL);
 
 	wowProcessContext.ContextFlags	= WOW64_CONTEXT_ALL;
 	ProcessContext.ContextFlags		= CONTEXT_ALL;
@@ -171,7 +172,7 @@ void clsDebugger::DebuggingLoop()
 
 	if(dbgSettings.bUseMSSymbols)
 	{
-		symbolPath = QString("srv*%1/symbols*http://msdl.microsoft.com/download/symbols").arg(QDir::currentPath());
+		symbolPath = QString("srv*%1/symbols*https://msdl.microsoft.com/download/symbols").arg(QCoreApplication::applicationDirPath());
 	}
 
 	if(dbgSettings.bKillOnExit)
@@ -302,6 +303,10 @@ void clsDebugger::DebuggingLoop()
 				if(pCurrentPID->bSymLoad && dbgSettings.bAutoLoadSymbols)
 				{
 					SymLoadModuleExW(pCurrentPID->hProc,NULL,sDLLFileName,0,(quint64)debug_event.u.LoadDll.lpBaseOfDll,0,0,0);
+				}
+				else if(pCurrentPID->bSymLoad && !dbgSettings.bAutoLoadSymbols)
+				{
+					// Auto-load symbols is disabled by user — not an error.
 				}
 				else
 				{
@@ -442,12 +447,12 @@ void clsDebugger::DebuggingLoop()
 
 							if(m_pBreakpointManager->BreakpointFind((DWORD64)exInfo->ExceptionAddress, SOFTWARE_BP, debug_event.dwProcessId, true, &pCurrentBP))
 							{
-								if(!WriteProcessMemory(pCurrentPID->hProc, (LPVOID)pCurrentBP->dwOffset, (LPVOID)pCurrentBP->bOrgByte, pCurrentBP->dwSize,NULL) &&
-									!FlushInstructionCache(pCurrentPID->hProc, (LPVOID)pCurrentBP->dwOffset, pCurrentBP->dwSize))
+								if(!WriteProcessMemory(pCurrentPID->hProc, (LPVOID)pCurrentBP->dwOffset, (LPVOID)pCurrentBP->bOrgByte, pCurrentBP->dwSize,NULL))
 								{
 									dwContinueStatus = CallBreakDebugger(&debug_event,0);
 									break;
 								}
+								FlushInstructionCache(pCurrentPID->hProc, (LPVOID)pCurrentBP->dwOffset, pCurrentBP->dwSize);
 
 								switch(pCurrentBP->dwHandle)
 								{
@@ -533,12 +538,12 @@ void clsDebugger::DebuggingLoop()
 						BPStruct *pCurrentBP;
 						if(m_pBreakpointManager->BreakpointFind((DWORD64)exInfo->ExceptionAddress, SOFTWARE_BP, debug_event.dwProcessId, true, &pCurrentBP))
 						{
-							if(!WriteProcessMemory(pCurrentPID->hProc, (LPVOID)pCurrentBP->dwOffset, (LPVOID)pCurrentBP->bOrgByte, pCurrentBP->dwSize,NULL) &&
-								!FlushInstructionCache(pCurrentPID->hProc, (LPVOID)pCurrentBP->dwOffset, pCurrentBP->dwSize))
+							if(!WriteProcessMemory(pCurrentPID->hProc, (LPVOID)pCurrentBP->dwOffset, (LPVOID)pCurrentBP->bOrgByte, pCurrentBP->dwSize,NULL))
 							{
 								dwContinueStatus = CallBreakDebugger(&debug_event,0);
 								break;
 							}
+							FlushInstructionCache(pCurrentPID->hProc, (LPVOID)pCurrentBP->dwOffset, pCurrentBP->dwSize);
 
 							pCurrentBP->bRestoreBP = true;
 						}
@@ -791,7 +796,11 @@ void clsDebugger::DebuggingLoop()
 						{
 							m_continueWithException = 0;
 							emit AskForException((DWORD)exInfo->ExceptionCode);
-							WaitForSingleObject(m_waitForGUI,INFINITE);
+
+							// 30-second timeout prevents permanent deadlock if the
+							// exception assistant dialog is closed without responding.
+							if(WaitForSingleObject(m_waitForGUI, 30000) == WAIT_TIMEOUT)
+								m_continueWithException = 0; // default: pass exception to app
 
 							if(m_continueWithException >= 10)
 							{
@@ -990,9 +999,9 @@ bool clsDebugger::SuspendProcess(DWORD dwPID,bool bSuspend)
 				SuspendThread(hThread);
 			else
 				ResumeThread(hThread);
+
+			CloseHandle(hThread);
 		}
-		
-		CloseHandle(hThread);
 	}while(Thread32Next(hProcessSnap,&threadEntry32));
 
 	CloseHandle(hProcessSnap);
@@ -1103,7 +1112,7 @@ HANDLE clsDebugger::GetCurrentProcessHandle(DWORD dwPID)
 void clsDebugger::HandleForException(int handleException)
 {
 	m_continueWithException = handleException;
-	PulseEvent(m_waitForGUI);
+	SetEvent(m_waitForGUI);
 }
 
 void clsDebugger::SetNewThreadContext(bool isWow64, CONTEXT newProcessContext, WOW64_CONTEXT newWowProcessContext)

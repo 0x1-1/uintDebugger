@@ -82,14 +82,11 @@ bool EnableDebugFlag()
 	tkpNewPriv.Privileges[0].Luid = luid;
 	tkpNewPriv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
 
-	if(!AdjustTokenPrivileges(hToken,0,&tkpNewPriv,0,0,0))
-	{
-		CloseHandle(hToken);
-		return false;
-	}
-	
+	AdjustTokenPrivileges(hToken,0,&tkpNewPriv,0,0,0);
+	const bool bGranted = (GetLastError() == ERROR_SUCCESS);
+
 	CloseHandle(hToken);
-	return true;
+	return bGranted;
 }
 
 int main(int argc, char *argv[])

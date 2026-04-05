@@ -38,7 +38,7 @@ bool clsDebugger::DetachFromProcess()
 		if(!CheckProcessState(PIDs[d].dwPID))
 			break;
 		DebugBreakProcess(PIDs[d].hProc);
-		PulseEvent(m_debugEvent);
+		SetEvent(m_debugEvent);
 	}
 	
 	return true;
@@ -95,7 +95,7 @@ bool clsDebugger::StopDebuggingAll()
 {
 	for(int i = 0;i < PIDs.size();i++)
 		StopDebugging(PIDs[i].dwPID);
-	return PulseEvent(m_debugEvent);
+	return SetEvent(m_debugEvent);
 }
 
 bool clsDebugger::StopDebugging(DWORD dwPID)
@@ -116,7 +116,7 @@ bool clsDebugger::ResumeDebugging()
 {
 	for(int i = 0;i < PIDs.size(); i++)
 		SuspendProcess(PIDs[i].dwPID,false);
-	return PulseEvent(m_debugEvent);
+	return SetEvent(m_debugEvent);
 }
 
 bool clsDebugger::GetDebuggingState()
@@ -139,7 +139,7 @@ bool clsDebugger::StepOver(quint64 dwNewOffset)
 	if(!m_pBreakpointManager->BreakpointAdd(SOFTWARE_BP, NULL, m_currentPID, dwNewOffset, 1, BP_STEPOVER, NULL))
 		return false;
 
-	PulseEvent(m_debugEvent);
+	SetEvent(m_debugEvent);
 	return true;
 }
 
@@ -160,7 +160,7 @@ bool clsDebugger::StepIn()
 	ProcessContext.EFlags |= 0x100;
 #endif
 
-	return PulseEvent(m_debugEvent);
+	return SetEvent(m_debugEvent);
 }
 
 void clsDebugger::ClearTarget()

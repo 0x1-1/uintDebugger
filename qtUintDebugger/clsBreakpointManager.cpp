@@ -93,14 +93,21 @@ bool clsBreakpointManager::BreakpointInit(DWORD newProcessID, bool isThread)
 
 bool clsBreakpointManager::BreakpointClear()
 {
+	// Collect offsets first to avoid iterator invalidation during removal
+	QList<DWORD64> swOffsets, memOffsets, hwOffsets;
 	for(int i = 0; i < SoftwareBPs.size(); i++)
-		BreakpointRemove(SoftwareBPs[i].dwOffset, SOFTWARE_BP);
-
+		swOffsets.append(SoftwareBPs[i].dwOffset);
 	for(int i = 0; i < MemoryBPs.size(); i++)
-		BreakpointRemove(MemoryBPs[i].dwOffset, MEMORY_BP);
+		memOffsets.append(MemoryBPs[i].dwOffset);
+	for(int i = 0; i < HardwareBPs.size(); i++)
+		hwOffsets.append(HardwareBPs[i].dwOffset);
 
-	for(int i = 0; i < HardwareBPs.size(); i++)	
-		BreakpointRemove(HardwareBPs[i].dwOffset, HARDWARE_BP);
+	for(int i = 0; i < swOffsets.size(); i++)
+		BreakpointRemove(swOffsets[i], SOFTWARE_BP);
+	for(int i = 0; i < memOffsets.size(); i++)
+		BreakpointRemove(memOffsets[i], MEMORY_BP);
+	for(int i = 0; i < hwOffsets.size(); i++)
+		BreakpointRemove(hwOffsets[i], HARDWARE_BP);
 
 	SoftwareBPs.clear();
 	HardwareBPs.clear();
