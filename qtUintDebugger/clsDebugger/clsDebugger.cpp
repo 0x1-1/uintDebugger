@@ -472,6 +472,7 @@ void clsDebugger::DebuggingLoop()
 							}
 
 							bool bpNeedsReplace = false;
+							bool bConditionNotMet = false;
 							BPStruct *pCurrentBP;
 
 							if(m_pBreakpointManager->BreakpointFind((DWORD64)exInfo->ExceptionAddress, SOFTWARE_BP, debug_event.dwProcessId, true, &pCurrentBP))
@@ -489,6 +490,19 @@ void clsDebugger::DebuggingLoop()
 									pCurrentBP->bRestoreBP = true;
 									bpNeedsReplace = true;
 
+									// Conditional (hit-count) check: only break the debugger
+									// once the hit counter reaches the target.
+									if(pCurrentBP->dwHitTarget > 0)
+									{
+										if(++pCurrentBP->dwHitCount < pCurrentBP->dwHitTarget)
+										{
+											bConditionNotMet = true; // pass through silently
+										}
+										else
+										{
+											pCurrentBP->dwHitCount = 0; // reset for next use
+										}
+									}
 									break;
 								case BP_DONOTKEEP:
 								case BP_STEPOVER: // StepOver BP
@@ -508,7 +522,7 @@ void clsDebugger::DebuggingLoop()
 									break;
 								}
 							}
-								
+
 							if(bpNeedsReplace || bStepOver)
 							{
 								SetThreadContextHelper(true, true, debug_event.dwThreadId, pCurrentPID);
@@ -523,6 +537,12 @@ void clsDebugger::DebuggingLoop()
 							if(bIsEP && !dbgSettings.bBreakOnModuleEP)
 							{
 								dwContinueStatus = CallBreakDebugger(&debug_event,2);
+							}
+							else if(bConditionNotMet)
+							{
+								// Hit target not yet reached — re-install INT3 via
+								// single-step (bpNeedsReplace already set) and resume.
+								dwContinueStatus = DBG_EXCEPTION_HANDLED;
 							}
 							else
 							{

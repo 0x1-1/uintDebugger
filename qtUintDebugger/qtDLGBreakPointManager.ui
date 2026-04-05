@@ -74,6 +74,11 @@
    </column>
    <column>
     <property name="text">
+     <string>Hit Target</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
      <string>Break On</string>
     </property>
    </column>
@@ -280,9 +285,44 @@
      <rect>
       <x>60</x>
       <y>50</y>
-      <width>260</width>
+      <width>185</width>
       <height>20</height>
      </rect>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelHitTarget">
+    <property name="geometry">
+     <rect>
+      <x>252</x>
+      <y>50</y>
+      <width>46</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Hit Cnt :</string>
+    </property>
+   </widget>
+   <widget class="QSpinBox" name="sbHitTarget">
+    <property name="geometry">
+     <rect>
+      <x>301</x>
+      <y>50</y>
+      <width>52</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="minimum">
+     <number>0</number>
+    </property>
+    <property name="maximum">
+     <number>99999</number>
+    </property>
+    <property name="value">
+     <number>0</number>
+    </property>
+    <property name="toolTip">
+     <string>Break on hit N (0 = every hit)</string>
     </property>
    </widget>
    <widget class="QLabel" name="label_5">

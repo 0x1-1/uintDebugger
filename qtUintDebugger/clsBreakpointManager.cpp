@@ -194,7 +194,7 @@ bool clsBreakpointManager::BreakpointRemove(DWORD64 breakpointOffset, DWORD brea
 	return true;
 }
 
-bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType)
+bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType, DWORD hitTarget)
 {
 	if(breakpointOffset == NULL) return false;
 
@@ -232,6 +232,7 @@ bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, D
 	if(!bExists)
 	{
 		BPStruct newBP = { 0 };
+		newBP.dwHitTarget = hitTarget;
 
 		switch(breakpointType)
 		{
@@ -461,10 +462,10 @@ void clsBreakpointManager::RemoveSBPFromMemory(bool isDisable, DWORD processID)
 	}
 }
 
-bool clsBreakpointManager::BreakpointInsert(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType)
+bool clsBreakpointManager::BreakpointInsert(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType, DWORD hitTarget)
 {
 	if(s_instance == NULL) return false;
-	return s_instance->BreakpointAdd(breakpointType, typeFlag, processID, breakpointOffset, breakpointSize, breakpointHandleType, breakpointDataType);
+	return s_instance->BreakpointAdd(breakpointType, typeFlag, processID, breakpointOffset, breakpointSize, breakpointHandleType, breakpointDataType, hitTarget);
 }
 
 bool clsBreakpointManager::BreakpointDelete(DWORD64 breakpointOffset, DWORD breakpointType)

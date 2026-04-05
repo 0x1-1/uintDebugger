@@ -38,6 +38,7 @@ qtDLGBreakPointManager::qtDLGBreakPointManager(QWidget *parent, Qt::WindowFlags 
 	tblBPs->horizontalHeader()->resizeSection(1,135);
 	tblBPs->horizontalHeader()->resizeSection(2,135);
 	tblBPs->horizontalHeader()->resizeSection(3,50);
+	tblBPs->horizontalHeader()->resizeSection(4,65);
 	tblBPs->horizontalHeader()->setFixedHeight(21);
 
 	connect(pbClose,SIGNAL(clicked()),this,SLOT(OnClose()));
@@ -99,6 +100,8 @@ void qtDLGBreakPointManager::OnUpdate(BPStruct newBP,int breakpointType)
 
 		tblBPs->setItem(tblBPs->rowCount() - 1,3,new QTableWidgetItem(QString("%1").arg(newBP.dwSize,2,16,QChar('0'))));
 
+		tblBPs->setItem(tblBPs->rowCount() - 1,4,new QTableWidgetItem(QString::number(newBP.dwHitTarget)));
+
 		switch(newBP.dwTypeFlag)
 		{
 		case BP_EXEC:
@@ -114,7 +117,7 @@ void qtDLGBreakPointManager::OnUpdate(BPStruct newBP,int breakpointType)
 			TempString = "Access";
 			break;
 		}
-		tblBPs->setItem(tblBPs->rowCount() - 1,4,new QTableWidgetItem(TempString));
+		tblBPs->setItem(tblBPs->rowCount() - 1,5,new QTableWidgetItem(TempString));
 	}
 	else if(newBP.dwHandle == BP_OFFSETUPDATE)
 	{ // BP got new Offset
@@ -216,10 +219,12 @@ void qtDLGBreakPointManager::OnAddUpdate()
 		dwType = MEMORY_BP;
 
 
+	const DWORD dwHitTarget = (DWORD)sbHitTarget->value();
+
 	if(lePID->text().toInt() == -1)
-		clsBreakpointManager::BreakpointInsert(dwType, dwBreakOn, lePID->text().toInt(), dwOffset, cbSize->currentText().toInt(), BP_KEEP, dwBreakpointDataType);
+		clsBreakpointManager::BreakpointInsert(dwType, dwBreakOn, lePID->text().toInt(), dwOffset, cbSize->currentText().toInt(), BP_KEEP, dwBreakpointDataType, dwHitTarget);
 	else
-		clsBreakpointManager::BreakpointInsert(dwType, dwBreakOn, lePID->text().toInt(0,16), dwOffset, cbSize->currentText().toInt(), BP_KEEP, dwBreakpointDataType);
+		clsBreakpointManager::BreakpointInsert(dwType, dwBreakOn, lePID->text().toInt(0,16), dwOffset, cbSize->currentText().toInt(), BP_KEEP, dwBreakpointDataType, dwHitTarget);
 }
 
 void qtDLGBreakPointManager::OnSelectedBPChanged(int iRow,int iCol)
@@ -227,16 +232,21 @@ void qtDLGBreakPointManager::OnSelectedBPChanged(int iRow,int iCol)
 	lePID->setText(tblBPs->item(iRow,0)->text());
 	leOffset->setText(tblBPs->item(iRow,1)->text());
 
+	if(tblBPs->item(iRow,4) != nullptr)
+		sbHitTarget->setValue(tblBPs->item(iRow,4)->text().toInt());
+	else
+		sbHitTarget->setValue(0);
+
 	DWORD	selectedBreakType	= NULL,
 			selectedBPSize		= tblBPs->item(iRow,3)->text().toInt();
 
-	if(QString().compare(tblBPs->item(iRow,4)->text(),"Execute") == 0)
+	if(QString().compare(tblBPs->item(iRow,5)->text(),"Execute") == 0)
 		selectedBreakType = BP_EXEC;
-	else if(QString().compare(tblBPs->item(iRow,4)->text(),"Read") == 0)
+	else if(QString().compare(tblBPs->item(iRow,5)->text(),"Read") == 0)
 		selectedBreakType = BP_READ;
-	else if(QString().compare(tblBPs->item(iRow,4)->text(),"Write") == 0)
+	else if(QString().compare(tblBPs->item(iRow,5)->text(),"Write") == 0)
 		selectedBreakType = BP_WRITE;
-	else if(QString().compare(tblBPs->item(iRow,4)->text(),"Access") == 0)
+	else if(QString().compare(tblBPs->item(iRow,5)->text(),"Access") == 0)
 		selectedBreakType = BP_ACCESS;
 
 	if(tblBPs->item(iRow,2)->text().contains("Software BP"))
