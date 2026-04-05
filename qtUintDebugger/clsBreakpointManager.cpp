@@ -33,13 +33,20 @@ clsBreakpointManager::~clsBreakpointManager()
 	{
 		clsMemManager::CFree(SoftwareBPs[i].moduleName);
 		clsMemManager::CFree(SoftwareBPs[i].bOrgByte);
+		clsMemManager::CFree(SoftwareBPs[i].comment);
 	}
 
 	for(int i = 0; i < MemoryBPs.size(); i++)
+	{
 		clsMemManager::CFree(MemoryBPs[i].moduleName);
+		clsMemManager::CFree(MemoryBPs[i].comment);
+	}
 
-	for(int i = 0; i < HardwareBPs.size(); i++)	
+	for(int i = 0; i < HardwareBPs.size(); i++)
+	{
 		clsMemManager::CFree(HardwareBPs[i].moduleName);
+		clsMemManager::CFree(HardwareBPs[i].comment);
+	}
 
 	SoftwareBPs.clear();
 	HardwareBPs.clear();
@@ -51,6 +58,55 @@ clsBreakpointManager::~clsBreakpointManager()
 clsBreakpointManager* clsBreakpointManager::GetInstance()
 {
 	return s_instance;
+}
+
+bool clsBreakpointManager::SetBPComment(DWORD64 offset, DWORD bpType, const QString &comment)
+{
+	QList<BPStruct> *pList = NULL;
+	switch(bpType)
+	{
+	case SOFTWARE_BP:  pList = &SoftwareBPs; break;
+	case MEMORY_BP:    pList = &MemoryBPs;   break;
+	case HARDWARE_BP:  pList = &HardwareBPs; break;
+	default: return false;
+	}
+
+	QWriteLocker locker(&m_bpLock);
+	for(int i = 0; i < pList->size(); i++)
+	{
+		if((*pList)[i].dwOffset == offset)
+		{
+			clsMemManager::CFree((*pList)[i].comment);
+			if(!comment.isEmpty())
+			{
+				(*pList)[i].comment = (PTCHAR)clsMemManager::CAlloc((comment.length() + 1) * sizeof(TCHAR));
+				if((*pList)[i].comment == NULL) return false;
+				comment.toWCharArray((*pList)[i].comment);
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+QString clsBreakpointManager::GetBPComment(quint64 offset)
+{
+	if(s_instance == NULL) return QString();
+	QReadLocker locker(&s_instance->m_bpLock);
+
+	for(int i = 0; i < s_instance->SoftwareBPs.size(); i++)
+		if(s_instance->SoftwareBPs[i].dwOffset == offset && s_instance->SoftwareBPs[i].comment != NULL)
+			return QString::fromWCharArray(s_instance->SoftwareBPs[i].comment);
+
+	for(int i = 0; i < s_instance->MemoryBPs.size(); i++)
+		if(s_instance->MemoryBPs[i].dwOffset == offset && s_instance->MemoryBPs[i].comment != NULL)
+			return QString::fromWCharArray(s_instance->MemoryBPs[i].comment);
+
+	for(int i = 0; i < s_instance->HardwareBPs.size(); i++)
+		if(s_instance->HardwareBPs[i].dwOffset == offset && s_instance->HardwareBPs[i].comment != NULL)
+			return QString::fromWCharArray(s_instance->HardwareBPs[i].comment);
+
+	return QString();
 }
 
 bool clsBreakpointManager::BreakpointInit(DWORD newProcessID, bool isThread)
@@ -142,6 +198,7 @@ void clsBreakpointManager::BreakpointRemoveImpl(DWORD64 breakpointOffset, DWORD 
 					clsBreakpointSoftware::dSoftwareBP(pCurrentBP->dwPID, pCurrentBP->dwOffset, pCurrentBP->dwSize, pCurrentBP->bOrgByte);
 					clsMemManager::CFree(pCurrentBP->moduleName);
 					clsMemManager::CFree(pCurrentBP->bOrgByte);
+					clsMemManager::CFree(pCurrentBP->comment);
 					SoftwareBPs.removeAt(i);
 					break;
 				}
@@ -158,6 +215,7 @@ void clsBreakpointManager::BreakpointRemoveImpl(DWORD64 breakpointOffset, DWORD 
 					clsBreakpointMemory::dMemoryBP(pCurrentBP->dwPID, pCurrentBP->dwOffset, pCurrentBP->dwSize, pCurrentBP->dwOldProtection);
 					clsMemManager::CFree(pCurrentBP->moduleName);
 					clsMemManager::CFree(pCurrentBP->bOrgByte);
+					clsMemManager::CFree(pCurrentBP->comment);
 					MemoryBPs.removeAt(i);
 					break;
 				}
@@ -174,6 +232,7 @@ void clsBreakpointManager::BreakpointRemoveImpl(DWORD64 breakpointOffset, DWORD 
 					clsBreakpointHardware::dHardwareBP(pCurrentBP->dwPID, pCurrentBP->dwOffset, pCurrentBP->dwSlot);
 					clsMemManager::CFree(pCurrentBP->moduleName);
 					clsMemManager::CFree(pCurrentBP->bOrgByte);
+					clsMemManager::CFree(pCurrentBP->comment);
 					HardwareBPs.removeAt(i);
 					break;
 				}
@@ -194,7 +253,7 @@ bool clsBreakpointManager::BreakpointRemove(DWORD64 breakpointOffset, DWORD brea
 	return true;
 }
 
-bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType, DWORD hitTarget)
+bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType, DWORD hitTarget, DWORD tid)
 {
 	if(breakpointOffset == NULL) return false;
 
@@ -233,6 +292,7 @@ bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, D
 	{
 		BPStruct newBP = { 0 };
 		newBP.dwHitTarget = hitTarget;
+		newBP.dwTID       = tid;
 
 		switch(breakpointType)
 		{
@@ -462,10 +522,10 @@ void clsBreakpointManager::RemoveSBPFromMemory(bool isDisable, DWORD processID)
 	}
 }
 
-bool clsBreakpointManager::BreakpointInsert(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType, DWORD hitTarget)
+bool clsBreakpointManager::BreakpointInsert(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType, DWORD hitTarget, DWORD tid)
 {
 	if(s_instance == NULL) return false;
-	return s_instance->BreakpointAdd(breakpointType, typeFlag, processID, breakpointOffset, breakpointSize, breakpointHandleType, breakpointDataType, hitTarget);
+	return s_instance->BreakpointAdd(breakpointType, typeFlag, processID, breakpointOffset, breakpointSize, breakpointHandleType, breakpointDataType, hitTarget, tid);
 }
 
 bool clsBreakpointManager::BreakpointDelete(DWORD64 breakpointOffset, DWORD breakpointType)
@@ -483,6 +543,7 @@ void clsBreakpointManager::BreakpointCleanup()
 		{
 			clsMemManager::CFree(it->moduleName);
 			clsMemManager::CFree(it->bOrgByte);
+			clsMemManager::CFree(it->comment);
 
 			SoftwareBPs.erase(it);
 			it = SoftwareBPs.begin();

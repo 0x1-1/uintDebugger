@@ -32,6 +32,18 @@
 
 clsDebugger* clsDebugger::s_instance = NULL;
 
+namespace
+{
+inline void CloseHandleIfValid(HANDLE &handle)
+{
+	if(handle != NULL && handle != INVALID_HANDLE_VALUE)
+	{
+		CloseHandle(handle);
+		handle = NULL;
+	}
+}
+}
+
 clsDebugger::clsDebugger() :
 	m_normalDebugging(true),
 	m_isDebugging(false),
@@ -54,6 +66,7 @@ clsDebugger::clsDebugger() :
 	ZeroMemory(&_si, sizeof(_si));
 	_si.cb = sizeof(_si);
 	ZeroMemory(&_pi, sizeof(_pi));
+	ZeroMemory(&m_dbgPI, sizeof(m_dbgPI));
 
 	ZeroMemory(&dbgSettings, sizeof(clsDebuggerSettings));
 
@@ -78,8 +91,8 @@ clsDebugger::~clsDebugger()
 
 	CleanWorkSpace();
 	
-	CloseHandle(m_waitForGUI);
-	CloseHandle(m_debugEvent);
+	CloseHandleIfValid(m_waitForGUI);
+	CloseHandleIfValid(m_debugEvent);
 }
 
 void clsDebugger::CleanWorkSpace()
@@ -107,21 +120,18 @@ void clsDebugger::CleanWorkSpace()
 	const HANDLE piProc   = _pi.hProcess;
 	const HANDLE piThread = _pi.hThread;
 
-	if(piProc != NULL && piThread != NULL)
-	{
-		CloseHandle(piProc);
-		CloseHandle(piThread);
-		ZeroMemory(&_si, sizeof(_si));
-		_si.cb = sizeof(_si);
-		ZeroMemory(&_pi, sizeof(_pi));
-	}
+	CloseHandleIfValid(_pi.hProcess);
+	CloseHandleIfValid(_pi.hThread);
+	ZeroMemory(&_si, sizeof(_si));
+	_si.cb = sizeof(_si);
+	ZeroMemory(&_pi, sizeof(_pi));
 
 	// For attach-debugging, _pi is never populated but m_dbgPI holds real handles
 	// opened by the debug API. Close them only if not already closed via _pi above.
 	if(m_dbgPI.hProcess != NULL && m_dbgPI.hProcess != piProc)
-		CloseHandle(m_dbgPI.hProcess);
+		CloseHandleIfValid(m_dbgPI.hProcess);
 	if(m_dbgPI.hThread != NULL && m_dbgPI.hThread != piThread)
-		CloseHandle(m_dbgPI.hThread);
+		CloseHandleIfValid(m_dbgPI.hThread);
 
 	ZeroMemory(&m_dbgPI, sizeof(m_dbgPI));
 }
@@ -424,8 +434,8 @@ void clsDebugger::DebuggingLoop()
 
 						pCurrentPID->bWOW64KernelBP = true;
 						bIsKernelBP = true;
-						[[fallthrough]]; // WOW64 BP also needs the standard BP handling below
 					}
+					[[fallthrough]]; // WOW64 BP also needs the standard BP handling below
 				case EXCEPTION_BREAKPOINT:
 					{
 						bool bStepOver = false;
@@ -490,8 +500,14 @@ void clsDebugger::DebuggingLoop()
 									pCurrentBP->bRestoreBP = true;
 									bpNeedsReplace = true;
 
-									// Conditional (hit-count) check: only break the debugger
-									// once the hit counter reaches the target.
+									// Thread-specific filter: skip if fired from a different TID.
+									if(pCurrentBP->dwTID != 0 && pCurrentBP->dwTID != debug_event.dwThreadId)
+									{
+										bConditionNotMet = true;
+										break;
+									}
+
+									// Hit-count filter: only break on the Nth hit.
 									if(pCurrentBP->dwHitTarget > 0)
 									{
 										if(++pCurrentBP->dwHitCount < pCurrentBP->dwHitTarget)
@@ -706,23 +722,32 @@ void clsDebugger::DebuggingLoop()
 							BPStruct *pCurrentBP;
 							if(m_pBreakpointManager->BreakpointFind((DWORD64)exInfo->ExceptionAddress, HARDWARE_BP, debug_event.dwProcessId, true, &pCurrentBP))
 							{
-								clsBreakpointHardware::dHardwareBP(debug_event.dwProcessId, pCurrentBP->dwOffset, pCurrentBP->dwSlot);
+								// Thread-specific filter: re-install and resume if wrong TID
+								if(pCurrentBP->dwTID != 0 && pCurrentBP->dwTID != debug_event.dwThreadId)
+								{
+									clsBreakpointHardware::wHardwareBP(debug_event.dwProcessId, pCurrentBP->dwOffset, pCurrentBP->dwSize, pCurrentBP->dwSlot, pCurrentBP->dwTypeFlag);
+									dwContinueStatus = DBG_EXCEPTION_HANDLED;
+								}
+								else
+								{
+									clsBreakpointHardware::dHardwareBP(debug_event.dwProcessId, pCurrentBP->dwOffset, pCurrentBP->dwSlot);
 
-								emit OnLog(QString("[!] Break on - Hardware BP - PID %1 - %2")
-									.arg(debug_event.dwProcessId, 6, 16, QChar('0'))
+									emit OnLog(QString("[!] Break on - Hardware BP - PID %1 - %2")
+										.arg(debug_event.dwProcessId, 6, 16, QChar('0'))
 #ifdef _AMD64_
-									.arg((DWORD64)pCurrentBP->dwOffset, 16, 16, QChar('0')));
+										.arg((DWORD64)pCurrentBP->dwOffset, 16, 16, QChar('0')));
 #else
-									.arg((DWORD)pCurrentBP->dwOffset, 8, 16, QChar('0')));
+										.arg((DWORD)pCurrentBP->dwOffset, 8, 16, QChar('0')));
 #endif
 
-								pCurrentBP->bRestoreBP = true;
-								pCurrentPID->dwBPRestoreFlag = RESTORE_BP_HARDWARE;
-								pCurrentPID->bTrapFlag = true;
-									
-								dwContinueStatus = CallBreakDebugger(&debug_event,0);
+									pCurrentBP->bRestoreBP = true;
+									pCurrentPID->dwBPRestoreFlag = RESTORE_BP_HARDWARE;
+									pCurrentPID->bTrapFlag = true;
 
-								SetThreadContextHelper(false, true, debug_event.dwThreadId, pCurrentPID);
+									dwContinueStatus = CallBreakDebugger(&debug_event,0);
+
+									SetThreadContextHelper(false, true, debug_event.dwThreadId, pCurrentPID);
+								}
 							}
 						}
 						else
@@ -750,6 +775,19 @@ void clsDebugger::DebuggingLoop()
 						{
 							pCurrentBP->bRestoreBP = true;
 
+							// Thread-specific filter
+							if(pCurrentBP->dwTID != 0 && pCurrentBP->dwTID != debug_event.dwThreadId)
+							{
+								// Wrong thread — restore page protection and resume silently
+								if(exInfo->ExceptionCode == EXCEPTION_ACCESS_VIOLATION)
+								{
+									DWORD currentProtection = NULL;
+									VirtualProtectEx(pCurrentPID->hProc, (LPVOID)exInfo->ExceptionAddress, pCurrentBP->dwSize, pCurrentBP->dwOldProtection, &currentProtection);
+								}
+								dwContinueStatus = DBG_EXCEPTION_HANDLED;
+								break;
+							}
+
 							emit OnLog(QString("[!] Break on - Memory BP - PID %1 - %2")
 								.arg(debug_event.dwProcessId, 6, 16, QChar('0'))
 #ifdef _AMD64_
@@ -765,7 +803,7 @@ void clsDebugger::DebuggingLoop()
 							}
 
 							dwContinueStatus = CallBreakDebugger(&debug_event,0);
-							break;							
+							break;
 						}
 						else
 						{ // PAGE_GUARD on a page where we placed an BP
@@ -886,10 +924,17 @@ DWORD clsDebugger::CallBreakDebugger(DEBUG_EVENT *debug_event,DWORD dwHandle)
 	case 0:
 		{
 			HANDLE hThread = OpenThread(THREAD_GETSET_CONTEXT,false,debug_event->dwThreadId);
+			const bool hasThreadHandle = (hThread != NULL);
 			m_currentPID = debug_event->dwProcessId;
 			m_currentTID = debug_event->dwThreadId;
 			m_currentProcess = GetCurrentProcessHandle(debug_event->dwProcessId);
 			m_debuggerBreak = true;
+
+			if(!hasThreadHandle)
+			{
+				emit OnLog(QString("[!] Could not open thread context for TID %1")
+					.arg(debug_event->dwThreadId, 6, 16, QChar('0')));
+			}
 
 #ifdef _AMD64_
 			BOOL bIsWOW64 = false;
@@ -898,37 +943,43 @@ DWORD clsDebugger::CallBreakDebugger(DEBUG_EVENT *debug_event,DWORD dwHandle)
 				clsAPIImport::pIsWow64Process(m_currentProcess,&bIsWOW64);
 			if(bIsWOW64)
 			{
-				clsAPIImport::pWow64GetThreadContext(hThread,&wowProcessContext);
+				if(hasThreadHandle)
+					clsAPIImport::pWow64GetThreadContext(hThread,&wowProcessContext);
 
 				emit OnDebuggerBreak();
 				WaitForSingleObject(m_debugEvent,INFINITE);
 
-				clsAPIImport::pWow64SetThreadContext(hThread,&wowProcessContext);
+				if(hasThreadHandle)
+					clsAPIImport::pWow64SetThreadContext(hThread,&wowProcessContext);
 			}
 			else
 			{
-				GetThreadContext(hThread,&ProcessContext);
+				if(hasThreadHandle)
+					GetThreadContext(hThread,&ProcessContext);
 
 				emit OnDebuggerBreak();
 				WaitForSingleObject(m_debugEvent,INFINITE);
 
-				SetThreadContext(hThread,&ProcessContext);
+				if(hasThreadHandle)
+					SetThreadContext(hThread,&ProcessContext);
 			}
 
 #else
-			GetThreadContext(hThread,&ProcessContext);
+			if(hasThreadHandle)
+				GetThreadContext(hThread,&ProcessContext);
 
 			emit OnDebuggerBreak();
 			WaitForSingleObject(m_debugEvent,INFINITE);
 
-			SetThreadContext(hThread,&ProcessContext);
+			if(hasThreadHandle)
+				SetThreadContext(hThread,&ProcessContext);
 #endif
 			m_currentPID    = 0;
 			m_currentTID    = 0;
 			m_currentProcess = nullptr;
 			m_debuggerBreak  = false;
 
-			CloseHandle(hThread);
+			CloseHandleIfValid(hThread);
 			return DBG_EXCEPTION_HANDLED;
 		}
 	case 1:
@@ -1090,7 +1141,7 @@ void clsDebugger::CustomExceptionRemoveAll()
 bool clsDebugger::SetThreadContextHelper(bool bDecIP, bool bSetTrapFlag, DWORD dwThreadID, PIDStruct *pCurrentPID)
 {
 	HANDLE hThread = OpenThread(THREAD_GETSET_CONTEXT, false, dwThreadID);
-	if(hThread == INVALID_HANDLE_VALUE) 
+	if(hThread == NULL) 
 		return false;
 
 #ifdef _AMD64_
@@ -1148,7 +1199,7 @@ bool clsDebugger::SetThreadContextHelper(bool bDecIP, bool bSetTrapFlag, DWORD d
 	SetThreadContext(hThread, &cTT);
 #endif
 
-	CloseHandle(hThread);
+	CloseHandleIfValid(hThread);
 	return true;
 }
 

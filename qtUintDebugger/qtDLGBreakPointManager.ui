@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>688</width>
-    <height>264</height>
+    <height>289</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -74,12 +74,22 @@
    </column>
    <column>
     <property name="text">
+     <string>TID</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
      <string>Hit Target</string>
     </property>
    </column>
    <column>
     <property name="text">
      <string>Break On</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Comment</string>
     </property>
    </column>
   </widget>
@@ -89,7 +99,7 @@
      <x>4</x>
      <y>178</y>
      <width>681</width>
-     <height>81</height>
+     <height>106</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -259,6 +269,61 @@
     </property>
     <property name="text">
      <string>Add / Update</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelTID">
+    <property name="geometry">
+     <rect>
+      <x>358</x>
+      <y>20</y>
+      <width>25</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>TID :</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="leTID">
+    <property name="geometry">
+     <rect>
+      <x>386</x>
+      <y>20</y>
+      <width>75</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="placeholderText">
+     <string>0 = any</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelComment">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>78</y>
+      <width>55</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Comment :</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="leComment">
+    <property name="geometry">
+     <rect>
+      <x>68</x>
+      <y>78</y>
+      <width>607</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="placeholderText">
+     <string>Optional breakpoint label...</string>
     </property>
    </widget>
    <widget class="QPushButton" name="pbClose">

@@ -173,10 +173,16 @@ void qtDLGDisassembler::OnDisplayDisassembly(quint64 dwEIP)
 
 			
 			bookmarkComment = qtDLGBookmark::BookmarkGetComment(processID, disassemblyDataCurrent.value().Offset);
-			if(bookmarkComment.length() <= 0)
-				tblDisAs->setItem(lineCount, 3, new QTableWidgetItem(disassemblyDataCurrent.value().Comment));
-			else
+			if(bookmarkComment.length() > 0)
 				tblDisAs->setItem(lineCount, 3, new QTableWidgetItem(bookmarkComment));
+			else
+			{
+				QString bpComment = clsBreakpointManager::GetBPComment(disassemblyDataCurrent.value().Offset);
+				if(bpComment.length() > 0)
+					tblDisAs->setItem(lineCount, 3, new QTableWidgetItem(bpComment));
+				else
+					tblDisAs->setItem(lineCount, 3, new QTableWidgetItem(disassemblyDataCurrent.value().Comment));
+			}
 
 
 			++lineCount;++disassemblyDataCurrent;

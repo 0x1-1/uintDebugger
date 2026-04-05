@@ -189,6 +189,12 @@ void clsProjectFile::WriteBreakpointListToFile(QList<BPStruct> &tempBP, int bpTy
 			if(tempBP.at(i).dwHitTarget > 0)
 				xmlWriter.writeTextElement("breakpointHitTarget", QString::number(tempBP.at(i).dwHitTarget));
 
+			if(tempBP.at(i).dwTID != 0)
+				xmlWriter.writeTextElement("breakpointTID", QString::number(tempBP.at(i).dwTID));
+
+			if(tempBP.at(i).comment != NULL)
+				xmlWriter.writeTextElement("breakpointComment", QString::fromWCharArray(tempBP.at(i).comment));
+
 			xmlWriter.writeEndElement();
 		}
 	}
@@ -330,7 +336,7 @@ void clsProjectFile::ReadBookmarkDataFromFile(QXmlStreamReader &xmlReader)
 
 void clsProjectFile::ReadBreakpointDataFromFile(QXmlStreamReader &xmlReader)
 {
-	QString bpOffset, bpSize, bpTypeFlag, bpModName, bpDataType, bpHitTarget;
+	QString bpOffset, bpSize, bpTypeFlag, bpModName, bpDataType, bpHitTarget, bpTID, bpComment;
 	int bpType = NULL;
 
 	if(xmlReader.name().contains(u"BREAKPOINT_SW_BP"))
@@ -376,6 +382,16 @@ void clsProjectFile::ReadBreakpointDataFromFile(QXmlStreamReader &xmlReader)
 				xmlReader.readNext();
 				bpHitTarget = xmlReader.text().toString();
 			}
+			else if(xmlReader.name() == "breakpointTID")
+			{
+				xmlReader.readNext();
+				bpTID = xmlReader.text().toString();
+			}
+			else if(xmlReader.name() == "breakpointComment")
+			{
+				xmlReader.readNext();
+				bpComment = xmlReader.text().toString();
+			}
 		}
 
 		xmlReader.readNext();
@@ -393,6 +409,16 @@ void clsProjectFile::ReadBreakpointDataFromFile(QXmlStreamReader &xmlReader)
 
 		if(bpHitTarget.length() > 0)
 			newBreakpoint.dwHitTarget = bpHitTarget.toUInt();
+
+		if(bpTID.length() > 0)
+			newBreakpoint.dwTID = bpTID.toUInt();
+
+		if(bpComment.length() > 0)
+		{
+			newBreakpoint.comment = (PTCHAR)clsMemManager::CAlloc((bpComment.length() + 1) * sizeof(TCHAR));
+			if(newBreakpoint.comment != NULL)
+				bpComment.toWCharArray(newBreakpoint.comment);
+		}
 
 		newBreakpoint.dwHandle = BP_KEEP;
 		newBreakpoint.dwPID = -1;

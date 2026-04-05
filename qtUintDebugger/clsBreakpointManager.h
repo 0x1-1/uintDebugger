@@ -36,6 +36,7 @@ struct BPStruct
 	DWORD dwDataType;
 	DWORD dwHitCount;   /* runtime: how many times this BP has fired (not persisted) */
 	DWORD dwHitTarget;  /* break only on this hit number; 0 = break every time        */
+	DWORD dwTID;        /* break only on this thread ID; 0 = any thread               */
 	quint64 dwOffset;
 	quint64 dwBaseOffset;
 	quint64 dwOldOffset;
@@ -43,6 +44,7 @@ struct BPStruct
 	PBYTE bOrgByte;
 	bool bRestoreBP;
 	PTCHAR moduleName;
+	PTCHAR comment;     /* optional user label; heap-allocated like moduleName, NULL = none */
 };
 
 class clsBreakpointManager : public QObject
@@ -65,20 +67,23 @@ public:
 
 	bool BreakpointRemove(DWORD64 breakpointOffset, DWORD breakpointType);
 	bool BreakpointClear();
-	bool BreakpointAdd(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType, DWORD hitTarget = 0);
+	bool BreakpointAdd(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType, DWORD hitTarget = 0, DWORD tid = 0);
 	bool BreakpointInit(DWORD processID, bool isThread = false);
 	bool BreakpointFind(DWORD64 breakpointOffset, int breakpointType, DWORD processID, bool takeAll, BPStruct** pBreakpointSearched);
 
 	void BreakpointCleanup();
 	void BreakpointUpdateOffsets(HANDLE processHandle, DWORD processID);
 
+	bool SetBPComment(DWORD64 offset, DWORD bpType, const QString &comment);
+
 	static bool IsOffsetAnBP(quint64 Offset);
-	static bool BreakpointInsert(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType = NULL, DWORD hitTarget = 0);
+	static bool BreakpointInsert(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType = NULL, DWORD hitTarget = 0, DWORD tid = 0);
 	static bool BreakpointDelete(DWORD64 breakpointOffset, DWORD breakpointType);
 
 	static void RemoveSBPFromMemory(bool isDisable, DWORD processID);
 	static void BreakpointInsertFromProjectFile(BPStruct newBreakpoint, int bpType);
 
+	static QString GetBPComment(quint64 offset);
 	static clsBreakpointManager* GetInstance();
 
 signals:

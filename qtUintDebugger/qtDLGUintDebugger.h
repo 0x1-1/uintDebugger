@@ -41,6 +41,8 @@
 
 #include <QDockwidget>
 #include <QMainwindow>
+#include <QLineEdit>
+#include <QStringList>
 
 
 enum UPDATE_STATE
@@ -90,6 +92,7 @@ public slots:
 	void UpdateStateBar(int actionType, quint64 stepCount = 0);
 
 private slots:
+	void AutosaveRestore();
 	void action_FileOpenNewFile();
 	void action_FileAttachTo();
 	void action_FileDetach();
@@ -126,6 +129,7 @@ private slots:
 	void action_DebugTraceStop();
 	void action_DebugTraceShow();
 		
+	void OnCommandExecute();
 	void AskForException(DWORD exceptionCode);
 	void OnDebuggerBreak();
 	void OnDebuggerTerminated();
@@ -135,6 +139,10 @@ private slots:
 private:
 	int m_iMenuProcessID;
 	int m_iSelectedRow;
+
+	QLineEdit   *m_cmdInput;
+	QStringList  m_cmdHistory;
+	int          m_cmdHistoryIdx;
 
 	QMenu *m_pRecentFiles;
 
@@ -151,10 +159,14 @@ private:
 	void InsertRecentDebuggedFile(QString fileName);
 	void CleanGUI(bool bKeepLogBox = false);
 
+	static QString AutosavePath();
+	void AutosaveSave();
+
 protected:
 	void dragEnterEvent(QDragEnterEvent* pEvent);
 	void dropEvent(QDropEvent* pEvent);
 	void closeEvent(QCloseEvent* closeEvent);
+	bool eventFilter(QObject *obj, QEvent *ev) override;
 };
 
 #endif // QTDLGUINTDEBUGGER_H

@@ -27,9 +27,20 @@
 #include "clsAPIImport.h"
 #include "clsProjectFile.h"
 #include "clsMemManager.h"
+#include "clsCommandParser.h"
 #include "uintDebuggerVersion.h"
 
 #include <Psapi.h>
+#include <QStandardPaths>
+#include <QDir>
+#include <QFile>
+#include <QTimer>
+#include <QMessageBox>
+#include <QStatusBar>
+#include <QPushButton>
+#include <QHBoxLayout>
+#include <QWidget>
+#include <QKeyEvent>
 
 qtDLGUintDebugger* qtDLGUintDebugger::qtDLGMyWindow = NULL;
 
@@ -44,7 +55,9 @@ QString MainWindowTitle()
 qtDLGUintDebugger::qtDLGUintDebugger(QWidget *parent, Qt::WindowFlags flags)
 	: QMainWindow(parent, flags),
 	m_IsRestart(false),
-	lExceptionCount(0)
+	lExceptionCount(0),
+	m_cmdInput(nullptr),
+	m_cmdHistoryIdx(-1)
 {
 	qtDLGMyWindow = this;
 
@@ -175,6 +188,9 @@ qtDLGUintDebugger::qtDLGUintDebugger(QWidget *parent, Qt::WindowFlags flags)
 	actionDebug_Trace_Stop->setDisabled(true);
 
 	ParseCommandLineArgs();
+
+	// Offer to restore the previous autosave after the main window is shown.
+	QTimer::singleShot(0, this, SLOT(AutosaveRestore()));
 }
 
 qtDLGUintDebugger::~qtDLGUintDebugger()
@@ -226,6 +242,88 @@ void qtDLGUintDebugger::LoadWidgets()
 		this->splitDockWidget(this->callstackView, this->stackView, Qt::Vertical);
 		this->splitDockWidget(this->stackView, this->logView, Qt::Horizontal);
 	}
+
+	// --- Command bar in status bar -------------------------------------------
+	QWidget    *cmdWrapper = new QWidget(this);
+	QHBoxLayout *cmdLayout = new QHBoxLayout(cmdWrapper);
+	cmdLayout->setContentsMargins(4, 1, 4, 1);
+	cmdLayout->setSpacing(4);
+
+	m_cmdInput = new QLineEdit(cmdWrapper);
+	m_cmdInput->setPlaceholderText("Command (? for help)");
+	m_cmdInput->setMinimumWidth(320);
+	m_cmdInput->setMaximumHeight(22);
+	m_cmdInput->setStyleSheet("QLineEdit { font-family: monospace; font-size: 11px; }");
+
+	// Up/down arrow key history navigation
+	m_cmdInput->installEventFilter(this);
+
+	QPushButton *cmdBtn = new QPushButton("Run", cmdWrapper);
+	cmdBtn->setMaximumHeight(22);
+	cmdBtn->setMaximumWidth(36);
+
+	cmdLayout->addWidget(m_cmdInput);
+	cmdLayout->addWidget(cmdBtn);
+	cmdWrapper->setLayout(cmdLayout);
+
+	stateBar->addPermanentWidget(cmdWrapper);
+
+	connect(cmdBtn,    &QPushButton::clicked,      this, &qtDLGUintDebugger::OnCommandExecute);
+	connect(m_cmdInput, &QLineEdit::returnPressed, this, &qtDLGUintDebugger::OnCommandExecute);
+}
+
+void qtDLGUintDebugger::OnCommandExecute()
+{
+	if(!m_cmdInput) return;
+	const QString text = m_cmdInput->text().trimmed();
+	if(text.isEmpty()) return;
+
+	// History management
+	if(m_cmdHistory.isEmpty() || m_cmdHistory.last() != text)
+		m_cmdHistory.append(text);
+	m_cmdHistoryIdx = m_cmdHistory.size(); // past-the-end = "no selection"
+
+	m_cmdInput->clear();
+
+	const QString result = clsCommandParser::Execute(text);
+	if(!result.isEmpty() && logView)
+		logView->OnLog(result);
+}
+
+bool qtDLGUintDebugger::eventFilter(QObject *obj, QEvent *ev)
+{
+	if(obj == m_cmdInput && ev->type() == QEvent::KeyPress)
+	{
+		QKeyEvent *ke = static_cast<QKeyEvent*>(ev);
+		if(ke->key() == Qt::Key_Up)
+		{
+			if(!m_cmdHistory.isEmpty())
+			{
+				if(m_cmdHistoryIdx > 0)
+					--m_cmdHistoryIdx;
+				m_cmdInput->setText(m_cmdHistory.at(m_cmdHistoryIdx));
+			}
+			return true;
+		}
+		if(ke->key() == Qt::Key_Down)
+		{
+			if(!m_cmdHistory.isEmpty())
+			{
+				if(m_cmdHistoryIdx < m_cmdHistory.size() - 1)
+				{
+					++m_cmdHistoryIdx;
+					m_cmdInput->setText(m_cmdHistory.at(m_cmdHistoryIdx));
+				}
+				else
+				{
+					m_cmdHistoryIdx = m_cmdHistory.size();
+					m_cmdInput->clear();
+				}
+			}
+			return true;
+		}
+	}
+	return QMainWindow::eventFilter(obj, ev);
 }
 
 void qtDLGUintDebugger::OnDebuggerBreak()
@@ -470,9 +568,60 @@ void qtDLGUintDebugger::dropEvent(QDropEvent* pEvent)
     }
 }
 
+QString qtDLGUintDebugger::AutosavePath()
+{
+	QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+	QDir().mkpath(dir);
+	return dir + "/autosave.ndb";
+}
+
+void qtDLGUintDebugger::AutosaveSave()
+{
+	clsProjectFile(true, nullptr, AutosavePath());
+}
+
+void qtDLGUintDebugger::AutosaveRestore()
+{
+	const QString path = AutosavePath();
+	if(!QFile::exists(path))
+		return;
+
+	const auto btn = QMessageBox::question(this,
+		QStringLiteral("uintDebugger"),
+		QStringLiteral("An autosave from a previous session was found.\nRestore it?"),
+		QMessageBox::Yes | QMessageBox::No,
+		QMessageBox::Yes);
+
+	if(btn != QMessageBox::Yes)
+		return;
+
+	bool startDebugging = false;
+	clsProjectFile(false, &startDebugging, path);
+	if(startDebugging)
+		action_DebugStart();
+}
+
 void qtDLGUintDebugger::closeEvent(QCloseEvent* closeEvent)
 {
 	clsAppSettings::SharedInstance()->SaveWindowState(this);
+
+	if(coreDebugger->GetDebuggingState())
+	{
+		const auto btn = QMessageBox::question(this,
+			QStringLiteral("uintDebugger"),
+			QStringLiteral("Debugging is active. Save session before closing?"),
+			QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel,
+			QMessageBox::Yes);
+
+		if(btn == QMessageBox::Cancel)
+		{
+			closeEvent->ignore();
+			return;
+		}
+
+		if(btn == QMessageBox::Yes)
+			AutosaveSave();
+	}
 
 	closeEvent->accept();
 }

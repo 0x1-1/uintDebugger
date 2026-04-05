@@ -27,6 +27,7 @@ set(SOURCES
     clsBreakpointHardware.cpp
     clsBreakpointManager.cpp
     clsBreakpointMemory.cpp
+    clsCommandParser.cpp
     clsBreakpointSoftware.cpp
     clsCallstackWorker.cpp
     clsClipboardHelper.cpp
@@ -99,6 +100,7 @@ set(SOURCES
     clsBreakpointHardware.h
     clsBreakpointManager.h
     clsBreakpointMemory.h
+    clsCommandParser.h
     clsBreakpointSoftware.h
     clsCallstackWorker.h
     clsClipboardHelper.h
