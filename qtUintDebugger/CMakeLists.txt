@@ -162,6 +162,7 @@ set(SOURCES
 )
 
 qt_add_executable(uintDebugger WIN32 ${SOURCES})
+uintdebugger_configure_output_dirs(uintDebugger)
 
 target_include_directories(uintDebugger PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}

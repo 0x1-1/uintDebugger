@@ -59,10 +59,15 @@ qtDLGOpenNewFile::~qtDLGOpenNewFile()
 
 void qtDLGOpenNewFile::BrowseForTarget()
 {
+	QFileDialog::Options dialogOptions;
+	dialogOptions |= QFileDialog::DontUseNativeDialog;
+
 	QString filePath = QFileDialog::getOpenFileName(this,
 		"Please select a Target",
 		QDir::currentPath(),
-		"Executables (*.exe)");
+		"Executables (*.exe)",
+		nullptr,
+		dialogOptions);
 
 	if(!filePath.isEmpty())
 		m_filePathLine->setText(QDir::toNativeSeparators(filePath));

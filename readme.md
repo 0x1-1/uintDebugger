@@ -35,7 +35,7 @@ cmake -B Build -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="C:/Qt/6.10
 cmake --build Build --config Release
 ```
 
-The resulting portable binaries are placed in `Build/Release/`.
+The resulting portable binaries are placed in `Release/`.
 
 ## Install
 
@@ -83,7 +83,7 @@ Release generation and publishing are documented in [RELEASING.md](./RELEASING.m
 2. Build `Release`.
 3. Run [tools/New-UpdateManifest.ps1](./tools/New-UpdateManifest.ps1) to generate release assets and the update manifest.
 4. Create a GitHub Release with tag format `vX.Y.Z`.
-5. Upload every generated asset from `Build/Release/github-release-assets/`.
+5. Upload every generated asset from `Release/github-release-assets/`.
 
 The application startup check compares the current version against the latest GitHub Release and offers to open the updater when a newer version exists.
 

@@ -227,7 +227,7 @@ void clsDebugger::DebuggingLoop()
 		{
 		case CREATE_PROCESS_DEBUG_EVENT:
 			{
-				CloseHandle(debug_event.u.CreateProcessInfo.hFile);
+				CloseHandleIfValid(debug_event.u.CreateProcessInfo.hFile);
 
 				HANDLE processHandle = debug_event.u.CreateProcessInfo.hProcess;
 				
@@ -346,7 +346,7 @@ void clsDebugger::DebuggingLoop()
 				if(dbgSettings.bBreakOnNewDLL)
 					dwContinueStatus = CallBreakDebugger(&debug_event,0);
 
-				CloseHandle(debug_event.u.LoadDll.hFile);
+				CloseHandleIfValid(debug_event.u.LoadDll.hFile);
 			}
 			break;
 

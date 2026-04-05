@@ -19,7 +19,6 @@
 #include "clsCrashHandler.h"
 #include "clsMemManager.h"
 #include "uintDebuggerVersion.h"
-#include "..\uintDebuggerUpdater\UpdaterWidget\uupdatewidget.h"
 
 #include <QDateTime>
 #include <QDebug>
@@ -106,12 +105,5 @@ int main(int argc, char *argv[])
 	qInstallMessageHandler(QtMessageToFile);
 	qtDLGUintDebugger w;
 	w.show();
-	UUpdateWidget::ScheduleStartupUpdateCheck(&w);
-
-#ifdef _DEBUG
-	return a.exec(); 
-#else
-	// ugly workaround for cruntime crash caused by new override!
-	TerminateProcess(GetCurrentProcess(),a.exec());
-#endif
+	return a.exec();
 }

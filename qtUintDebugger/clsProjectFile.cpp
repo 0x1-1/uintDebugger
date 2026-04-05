@@ -20,6 +20,15 @@
 #include <QFileDialog>
 #include <QMessageBox>
 
+namespace
+{
+	QFileDialog::Options ProjectDialogOptions()
+	{
+		// Native dialogs were unstable in the current Qt6/Windows release path.
+		return QFileDialog::DontUseNativeDialog;
+	}
+}
+
 clsProjectFile::clsProjectFile(bool isSaveFile, bool *pStartDebugging, QString projectFile) :
 	m_pMainWindow(qtDLGUintDebugger::GetInstance())
 {
@@ -27,7 +36,12 @@ clsProjectFile::clsProjectFile(bool isSaveFile, bool *pStartDebugging, QString p
 	{
 		if(projectFile.length() <= 0)
 		{
-			projectFile = QFileDialog::getSaveFileName(m_pMainWindow, "Please select a save path", QDir::currentPath(), "uintDebugger Project Files (*.ndb)");
+			projectFile = QFileDialog::getSaveFileName(m_pMainWindow,
+				"Please select a save path",
+				QDir::currentPath(),
+				"uintDebugger Project Files (*.ndb)",
+				nullptr,
+				ProjectDialogOptions());
 
 			if(projectFile.length() <= 0)
 			{
@@ -49,7 +63,12 @@ clsProjectFile::clsProjectFile(bool isSaveFile, bool *pStartDebugging, QString p
 	{
 		if(projectFile.length() <= 0)
 		{
-			projectFile = QFileDialog::getOpenFileName(m_pMainWindow, "Please select a file to load", QDir::currentPath(), "uintDebugger Project Files (*.ndb)");
+			projectFile = QFileDialog::getOpenFileName(m_pMainWindow,
+				"Please select a file to load",
+				QDir::currentPath(),
+				"uintDebugger Project Files (*.ndb)",
+				nullptr,
+				ProjectDialogOptions());
 
 			if(projectFile.length() <= 0)
 			{
@@ -68,7 +87,8 @@ clsProjectFile::clsProjectFile(bool isSaveFile, bool *pStartDebugging, QString p
 			QMessageBox::information(m_pMainWindow, "uintDebugger", "Data has been loaded!", QMessageBox::Ok, QMessageBox::Ok);
 		}
 
-		*pStartDebugging = true;
+		if(pStartDebugging != NULL)
+			*pStartDebugging = true;
 
 	}
 }
@@ -218,7 +238,7 @@ bool clsProjectFile::ReadDataFromFile(const QString &loadFilePath)
 		}
 		else if(token == QXmlStreamReader::StartElement)
 		{
-			if(xmlReader.name() == "uintDebugger_DATA")
+			if(xmlReader.name() == "uintDebugger-DATA" || xmlReader.name() == "uintDebugger_DATA")
 			{
 				continue;
 			}
@@ -489,13 +509,15 @@ void clsProjectFile::ReadPatchDataFromFile(QXmlStreamReader &xmlReader)
 		patchModule.toWCharArray(newPatch.ModuleName);
 
 		BYTE tempNewData = NULL, tempOrgData = NULL;
+		LPBYTE newData = static_cast<LPBYTE>(newPatch.newData);
+		LPBYTE orgData = static_cast<LPBYTE>(newPatch.orgData);
 		for(int i = 0, d = 0; i < newPatch.PatchSize; i++ , d += 2)
 		{
 			tempNewData = patchNewData.mid(d, 2).toInt(0, 16);
 			tempOrgData = patchOrgData.mid(d, 2).toInt(0, 16);
 
-			memcpy((LPVOID)((DWORD)newPatch.newData + i), (LPVOID)&tempNewData, 1);
-			memcpy((LPVOID)((DWORD)newPatch.orgData + i), (LPVOID)&tempOrgData, 1);
+			newData[i] = tempNewData;
+			orgData[i] = tempOrgData;
 		}
 		
 		qtDLGPatchManager::InsertPatchFromProjectFile(newPatch);

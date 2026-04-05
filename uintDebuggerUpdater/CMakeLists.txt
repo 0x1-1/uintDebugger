@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 # updater.exe: WinAPI-only bootstrap that copies update files and launches uintDebugger.exe
 # Intentionally has no Qt dependency to keep it small and dependency-free.
 add_executable(updater main.cpp)
+uintdebugger_configure_output_dirs(updater)
 
 target_compile_definitions(updater PRIVATE
     WIN32

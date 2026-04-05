@@ -36,21 +36,21 @@ cmake --build Build --config Release
 
 Expected output folder:
 
-- `Build/Release/`
+- `Release/`
 
 ## 3. Generate Update Assets
 
 Run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\New-UpdateManifest.ps1 -ReleaseDir .\Build\Release
+powershell -ExecutionPolicy Bypass -File .\tools\New-UpdateManifest.ps1 -ReleaseDir .\Release
 ```
 
 This generates:
 
-- `Build/Release/github-release-assets/`
-- `Build/Release/github-release-assets/uintDebugger-update-manifest.json`
-- `Build/Release/github-release-assets/upload-release-assets.ps1`
+- `Release/github-release-assets/`
+- `Release/github-release-assets/uintDebugger-update-manifest.json`
+- `Release/github-release-assets/upload-release-assets.ps1`
 
 The staging folder contains release assets renamed for GitHub Releases. Nested files such as `platforms/qwindows.dll` are flattened into asset names like `platforms__qwindows.dll`, while the manifest keeps the original in-app relative path.
 
@@ -75,7 +75,7 @@ gh release create v0.2.0 --title "uintDebugger v0.2.0" --notes-file .\changelog.
 Then upload the generated assets:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\Build\Release\github-release-assets\upload-release-assets.ps1
+powershell -ExecutionPolicy Bypass -File .\Release\github-release-assets\upload-release-assets.ps1
 ```
 
 If you also want a human-friendly portable archive, create and upload one separately. The updater does not consume the `.zip`; it consumes the manifest plus per-file assets.
@@ -125,7 +125,7 @@ If you distribute a `.zip`, the extracted folder should preserve that exact layo
 ## 7. Sanity Checklist Before Push
 
 - `cmake --build Build --config Release`
-- launch `Build/Release/uintDebugger.exe`
+- launch `Release/uintDebugger.exe`
 - verify `Options -> Update` opens the updater and the startup check prompts correctly
 - confirm the generated manifest contains the files you actually want to ship
 - confirm the GitHub Release is public and contains every asset referenced by the manifest

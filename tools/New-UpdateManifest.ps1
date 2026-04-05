@@ -1,5 +1,5 @@
 param(
-    [string]$ReleaseDir = ".\Build\Release",
+    [string]$ReleaseDir = ".\Release",
     [string]$Version = "",
     [string]$Owner = "uintptr",
     [string]$Repository = "uintDebugger",
