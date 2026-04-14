@@ -17,6 +17,7 @@
 #include "qtDLGTrace.h"
 
 #include "clsDebugger.h"
+#include "../clsExpressionEvaluator.h"
 #include "clsAPIImport.h"
 #include "clsHelperClass.h"
 #include "clsPEManager.h"
@@ -483,40 +484,75 @@ void clsDebugger::DebuggingLoop()
 
 							bool bpNeedsReplace = false;
 							bool bConditionNotMet = false;
-							BPStruct *pCurrentBP;
+							BPStruct currentBP;
 
-							if(m_pBreakpointManager->BreakpointFind((DWORD64)exInfo->ExceptionAddress, SOFTWARE_BP, debug_event.dwProcessId, true, &pCurrentBP))
+							if(m_pBreakpointManager->BreakpointFind((DWORD64)exInfo->ExceptionAddress, SOFTWARE_BP, debug_event.dwProcessId, true, currentBP))
 							{
-								if(!WriteProcessMemory(pCurrentPID->hProc, (LPVOID)pCurrentBP->dwOffset, (LPVOID)pCurrentBP->bOrgByte, pCurrentBP->dwSize,NULL))
+								// Copy bOrgByte bytes to stack to avoid relying on pointer after lock release
+								BYTE orgBytesCopy[4] = {};
+								if(currentBP.bOrgByte && currentBP.dwSize <= 4)
+									memcpy(orgBytesCopy, currentBP.bOrgByte, currentBP.dwSize);
+
+								if(!WriteProcessMemory(pCurrentPID->hProc, (LPVOID)currentBP.dwOffset, orgBytesCopy, currentBP.dwSize, NULL))
 								{
 									dwContinueStatus = CallBreakDebugger(&debug_event,0);
 									break;
 								}
-								FlushInstructionCache(pCurrentPID->hProc, (LPVOID)pCurrentBP->dwOffset, pCurrentBP->dwSize);
+								FlushInstructionCache(pCurrentPID->hProc, (LPVOID)currentBP.dwOffset, currentBP.dwSize);
 
-								switch(pCurrentBP->dwHandle)
+								switch(currentBP.dwHandle)
 								{
 								case BP_KEEP: // normal breakpoint
-									pCurrentBP->bRestoreBP = true;
+									m_pBreakpointManager->BreakpointSetRestoreFlag(currentBP.dwOffset, SOFTWARE_BP, debug_event.dwProcessId, true);
 									bpNeedsReplace = true;
 
 									// Thread-specific filter: skip if fired from a different TID.
-									if(pCurrentBP->dwTID != 0 && pCurrentBP->dwTID != debug_event.dwThreadId)
+									if(currentBP.dwTID != 0 && currentBP.dwTID != debug_event.dwThreadId)
 									{
 										bConditionNotMet = true;
 										break;
 									}
 
 									// Hit-count filter: only break on the Nth hit.
-									if(pCurrentBP->dwHitTarget > 0)
+									if(currentBP.dwHitTarget > 0)
 									{
-										if(++pCurrentBP->dwHitCount < pCurrentBP->dwHitTarget)
+										if(!m_pBreakpointManager->BreakpointIncrementHitCount(currentBP.dwOffset, SOFTWARE_BP, debug_event.dwProcessId, true))
+											bConditionNotMet = true;
+									}
+
+									// Expression condition filter.
+									if(!bConditionNotMet && !currentBP.sCondition.isEmpty())
+									{
+										BOOL bIsWOW64ctx = false;
+#ifdef _AMD64_
+										if(clsAPIImport::pIsWow64Process)
+											clsAPIImport::pIsWow64Process(pCurrentPID->hProc, &bIsWOW64ctx);
+#endif
+										HANDLE hCondThread = OpenThread(THREAD_GET_CONTEXT, false, debug_event.dwThreadId);
+										if(hCondThread != NULL)
 										{
-											bConditionNotMet = true; // pass through silently
-										}
-										else
-										{
-											pCurrentBP->dwHitCount = 0; // reset for next use
+											bool condMet = true;
+#ifdef _AMD64_
+											if(bIsWOW64ctx && clsAPIImport::pWow64GetThreadContext)
+											{
+												WOW64_CONTEXT wowCtx = {};
+												wowCtx.ContextFlags = WOW64_CONTEXT_ALL;
+												if(clsAPIImport::pWow64GetThreadContext(hCondThread, &wowCtx))
+													condMet = clsExpressionEvaluator::evaluateCondition(
+														currentBP.sCondition, pCurrentPID->hProc, &wowCtx, true);
+											}
+											else
+#endif
+											{
+												CONTEXT ctx = {};
+												ctx.ContextFlags = CONTEXT_ALL;
+												if(GetThreadContext(hCondThread, &ctx))
+													condMet = clsExpressionEvaluator::evaluateCondition(
+														currentBP.sCondition, pCurrentPID->hProc, &ctx, false);
+											}
+											CloseHandle(hCondThread);
+											if(!condMet)
+												bConditionNotMet = true;
 										}
 									}
 									break;
@@ -525,16 +561,16 @@ void clsDebugger::DebuggingLoop()
 									if(!bIsEP)
 										bStepOver = true;
 
-									m_pBreakpointManager->BreakpointRemove(pCurrentBP->dwOffset,SOFTWARE_BP);
+									m_pBreakpointManager->BreakpointRemove(currentBP.dwOffset, SOFTWARE_BP);
 									break;
 								case BP_TRACETO: // Trace End BP
 									m_singleStepFlag = false;
 
-									m_pBreakpointManager->BreakpointRemove(pCurrentBP->dwOffset,SOFTWARE_BP);
+									m_pBreakpointManager->BreakpointRemove(currentBP.dwOffset, SOFTWARE_BP);
 									break;
 
 								default:
-									pCurrentBP->bRestoreBP = true;
+									m_pBreakpointManager->BreakpointSetRestoreFlag(currentBP.dwOffset, SOFTWARE_BP, debug_event.dwProcessId, true);
 									break;
 								}
 							}
@@ -600,17 +636,21 @@ void clsDebugger::DebuggingLoop()
 							break;
 						}
 
-						BPStruct *pCurrentBP;
-						if(m_pBreakpointManager->BreakpointFind((DWORD64)exInfo->ExceptionAddress, SOFTWARE_BP, debug_event.dwProcessId, true, &pCurrentBP))
+						BPStruct currentBP;
+						if(m_pBreakpointManager->BreakpointFind((DWORD64)exInfo->ExceptionAddress, SOFTWARE_BP, debug_event.dwProcessId, true, currentBP))
 						{
-							if(!WriteProcessMemory(pCurrentPID->hProc, (LPVOID)pCurrentBP->dwOffset, (LPVOID)pCurrentBP->bOrgByte, pCurrentBP->dwSize,NULL))
+							BYTE orgBytesCopy[4] = {};
+							if(currentBP.bOrgByte && currentBP.dwSize <= 4)
+								memcpy(orgBytesCopy, currentBP.bOrgByte, currentBP.dwSize);
+
+							if(!WriteProcessMemory(pCurrentPID->hProc, (LPVOID)currentBP.dwOffset, orgBytesCopy, currentBP.dwSize, NULL))
 							{
 								dwContinueStatus = CallBreakDebugger(&debug_event,0);
 								break;
 							}
-							FlushInstructionCache(pCurrentPID->hProc, (LPVOID)pCurrentBP->dwOffset, pCurrentBP->dwSize);
+							FlushInstructionCache(pCurrentPID->hProc, (LPVOID)currentBP.dwOffset, currentBP.dwSize);
 
-							pCurrentBP->bRestoreBP = true;
+							m_pBreakpointManager->BreakpointSetRestoreFlag(currentBP.dwOffset, SOFTWARE_BP, debug_event.dwProcessId, true);
 						}
 								
 						SetThreadContextHelper(false, true, debug_event.dwThreadId, pCurrentPID);
@@ -719,28 +759,28 @@ void clsDebugger::DebuggingLoop()
 						}
 						else if(pCurrentPID->dwBPRestoreFlag == RESTORE_NON) // First time hit HwBP
 						{
-							BPStruct *pCurrentBP;
-							if(m_pBreakpointManager->BreakpointFind((DWORD64)exInfo->ExceptionAddress, HARDWARE_BP, debug_event.dwProcessId, true, &pCurrentBP))
+							BPStruct currentBP;
+							if(m_pBreakpointManager->BreakpointFind((DWORD64)exInfo->ExceptionAddress, HARDWARE_BP, debug_event.dwProcessId, true, currentBP))
 							{
 								// Thread-specific filter: re-install and resume if wrong TID
-								if(pCurrentBP->dwTID != 0 && pCurrentBP->dwTID != debug_event.dwThreadId)
+								if(currentBP.dwTID != 0 && currentBP.dwTID != debug_event.dwThreadId)
 								{
-									clsBreakpointHardware::wHardwareBP(debug_event.dwProcessId, pCurrentBP->dwOffset, pCurrentBP->dwSize, pCurrentBP->dwSlot, pCurrentBP->dwTypeFlag);
+									clsBreakpointHardware::wHardwareBP(debug_event.dwProcessId, currentBP.dwOffset, currentBP.dwSize, currentBP.dwSlot, currentBP.dwTypeFlag);
 									dwContinueStatus = DBG_EXCEPTION_HANDLED;
 								}
 								else
 								{
-									clsBreakpointHardware::dHardwareBP(debug_event.dwProcessId, pCurrentBP->dwOffset, pCurrentBP->dwSlot);
+									clsBreakpointHardware::dHardwareBP(debug_event.dwProcessId, currentBP.dwOffset, currentBP.dwSlot);
 
 									emit OnLog(QString("[!] Break on - Hardware BP - PID %1 - %2")
 										.arg(debug_event.dwProcessId, 6, 16, QChar('0'))
 #ifdef _AMD64_
-										.arg((DWORD64)pCurrentBP->dwOffset, 16, 16, QChar('0')));
+										.arg((DWORD64)currentBP.dwOffset, 16, 16, QChar('0')));
 #else
-										.arg((DWORD)pCurrentBP->dwOffset, 8, 16, QChar('0')));
+										.arg((DWORD)currentBP.dwOffset, 8, 16, QChar('0')));
 #endif
 
-									pCurrentBP->bRestoreBP = true;
+									m_pBreakpointManager->BreakpointSetRestoreFlag(currentBP.dwOffset, HARDWARE_BP, debug_event.dwProcessId, true);
 									pCurrentPID->dwBPRestoreFlag = RESTORE_BP_HARDWARE;
 									pCurrentPID->bTrapFlag = true;
 
@@ -770,19 +810,19 @@ void clsDebugger::DebuggingLoop()
 						pCurrentPID->dwBPRestoreFlag = RESTORE_BP_MEMORY;
 						pCurrentPID->bTrapFlag = true;
 
-						BPStruct *pCurrentBP;
-						if(m_pBreakpointManager->BreakpointFind((DWORD64)exInfo->ExceptionAddress, MEMORY_BP, debug_event.dwProcessId, true, &pCurrentBP))
+						BPStruct currentBP;
+						if(m_pBreakpointManager->BreakpointFind((DWORD64)exInfo->ExceptionAddress, MEMORY_BP, debug_event.dwProcessId, true, currentBP))
 						{
-							pCurrentBP->bRestoreBP = true;
+							m_pBreakpointManager->BreakpointSetRestoreFlag(currentBP.dwOffset, MEMORY_BP, debug_event.dwProcessId, true);
 
 							// Thread-specific filter
-							if(pCurrentBP->dwTID != 0 && pCurrentBP->dwTID != debug_event.dwThreadId)
+							if(currentBP.dwTID != 0 && currentBP.dwTID != debug_event.dwThreadId)
 							{
 								// Wrong thread — restore page protection and resume silently
 								if(exInfo->ExceptionCode == EXCEPTION_ACCESS_VIOLATION)
 								{
 									DWORD currentProtection = NULL;
-									VirtualProtectEx(pCurrentPID->hProc, (LPVOID)exInfo->ExceptionAddress, pCurrentBP->dwSize, pCurrentBP->dwOldProtection, &currentProtection);
+									VirtualProtectEx(pCurrentPID->hProc, (LPVOID)exInfo->ExceptionAddress, currentBP.dwSize, currentBP.dwOldProtection, &currentProtection);
 								}
 								dwContinueStatus = DBG_EXCEPTION_HANDLED;
 								break;
@@ -791,15 +831,15 @@ void clsDebugger::DebuggingLoop()
 							emit OnLog(QString("[!] Break on - Memory BP - PID %1 - %2")
 								.arg(debug_event.dwProcessId, 6, 16, QChar('0'))
 #ifdef _AMD64_
-								.arg((DWORD64)pCurrentBP->dwOffset, 16, 16, QChar('0')));
+								.arg((DWORD64)currentBP.dwOffset, 16, 16, QChar('0')));
 #else
-								.arg((DWORD)pCurrentBP->dwOffset, 8, 16, QChar('0')));
+								.arg((DWORD)currentBP.dwOffset, 8, 16, QChar('0')));
 #endif
 
 							if(exInfo->ExceptionCode == EXCEPTION_ACCESS_VIOLATION)
 							{
 								DWORD currentProtection = NULL;
-								VirtualProtectEx(pCurrentPID->hProc, (LPVOID)exInfo->ExceptionAddress, pCurrentBP->dwSize, pCurrentBP->dwOldProtection, &currentProtection);
+								VirtualProtectEx(pCurrentPID->hProc, (LPVOID)exInfo->ExceptionAddress, currentBP.dwSize, currentBP.dwOldProtection, &currentProtection);
 							}
 
 							dwContinueStatus = CallBreakDebugger(&debug_event,0);

@@ -30,6 +30,7 @@
 #include "qtDLGStack.h"
 #include "qtDLGLogView.h"
 #include "qtDLGDisassembler.h"
+#include "qtDLGWatch.h"
 
 #include "clsDisassembler.h"
 #include "clsDebugger/clsDebugger.h"
@@ -78,7 +79,8 @@ public:
 	qtDLGRegisters			*cpuRegView;
 	qtDLGCallstack			*callstackView;
 	qtDLGStack				*stackView;
-	qtDLGLogView			*logView;	
+	qtDLGLogView			*logView;
+	qtDLGWatch				*dlgWatch;
 	qtDLGDisassembler		*DisAsGUI;
 
 	disasColors				*disasColor;

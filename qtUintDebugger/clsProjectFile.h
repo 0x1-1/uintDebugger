@@ -40,6 +40,8 @@ private:
 	void ReadBookmarkDataFromFile(QXmlStreamReader &xmlReader);
 	void ReadBreakpointDataFromFile(QXmlStreamReader &xmlReader);
 	void ReadPatchDataFromFile(QXmlStreamReader &xmlReader);
+	void WriteWatchDataToFile(QXmlStreamWriter &xmlWriter);
+	void ReadWatchDataFromFile(QXmlStreamReader &xmlReader);
 };
 
 #endif

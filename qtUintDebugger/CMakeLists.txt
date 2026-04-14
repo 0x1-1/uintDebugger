@@ -28,6 +28,7 @@ set(SOURCES
     clsBreakpointManager.cpp
     clsBreakpointMemory.cpp
     clsCommandParser.cpp
+    clsExpressionEvaluator.cpp
     clsBreakpointSoftware.cpp
     clsCallstackWorker.cpp
     clsClipboardHelper.cpp
@@ -83,6 +84,7 @@ set(SOURCES
     qtDLGTIBView.cpp
     qtDLGTrace.cpp
     qtDLGWindowView.cpp
+    qtDLGWatch.cpp
 
     # Updater UI (compiled into main app)
     ../uintDebuggerUpdater/UpdaterWidget/ucheckupdateswidget.cpp
@@ -94,6 +96,9 @@ set(SOURCES
     ../uintDebuggerUpdater/UpdaterWidget/uupdatewidget.cpp
 
     # Headers with Q_OBJECT (needed for AUTOMOC)
+    uiHelpers.h
+    clsExpressionEvaluator.h
+    qtDLGWatch.h
     clsDebugger/clsDebugger.h
     clsAPIImport.h
     clsAppSettings.h

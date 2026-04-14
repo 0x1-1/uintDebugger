@@ -99,6 +99,10 @@ int main(int argc, char *argv[])
 		MessageBoxW(NULL,L"ERROR, Unable to enable Debug Privilege!\r\nThis could cause problems with some features",L"uintDebugger",MB_OK);
 	}
 
+	// Qt6: high-DPI is always enabled; PassThrough allows fractional factors (e.g. 150%)
+	QApplication::setHighDpiScaleFactorRoundingPolicy(
+		Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+
 	QApplication a(argc, argv);
 	a.setApplicationName(QStringLiteral(UINTDEBUGGER_DISPLAY_NAME));
 	a.setApplicationVersion(QStringLiteral(UINTDEBUGGER_VERSION_STRING));

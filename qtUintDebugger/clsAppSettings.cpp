@@ -33,6 +33,17 @@ clsAppSettings::clsAppSettings()
 
 	m_pDebugger = qtDLGUintDebugger::GetInstance()->coreDebugger;
 	m_pColors	= qtDLGUintDebugger::GetInstance()->disasColor;
+	m_entropyThreshold = 6.4f;
+}
+
+float clsAppSettings::getEntropyThreshold() const
+{
+	return m_entropyThreshold;
+}
+
+void clsAppSettings::setEntropyThreshold(float value)
+{
+	m_entropyThreshold = value;
 }
 
 clsAppSettings::~clsAppSettings()
@@ -118,6 +129,7 @@ void clsAppSettings::SaveDebuggerSettings()
 	userSettings->setValue("ExceptionAssist", m_pDebugger->dbgSettings.bUseExceptionAssist);
 	userSettings->setValue("SUSPENDTYPE", QString("%1").arg(m_pDebugger->dbgSettings.dwSuspendType));
 	userSettings->setValue("DefaultExceptionMode", QString("%1").arg(m_pDebugger->dbgSettings.dwDefaultExceptionMode));
+	userSettings->setValue("EntropyThreshold", m_entropyThreshold);
 
 	int exceptionHCounter = 0;
 	QString exceptionString = userSettings->value(QString("EXCEPTION%1").arg(exceptionHCounter)).toString();
@@ -184,6 +196,7 @@ void clsAppSettings::LoadDebuggerSettings()
 	m_pDebugger->dbgSettings.bUseExceptionAssist = userSettings->value("ExceptionAssist").toBool();
 	m_pDebugger->dbgSettings.dwSuspendType = userSettings->value("SUSPENDTYPE").toInt();
 	m_pDebugger->dbgSettings.dwDefaultExceptionMode = userSettings->value("DefaultExceptionMode").toInt();
+	m_entropyThreshold = userSettings->value("EntropyThreshold", 6.4f).toFloat();
 
 	m_pDebugger->CustomExceptionRemoveAll();
 	int i = 0;
@@ -279,6 +292,7 @@ void clsAppSettings::WriteDefaultSettings()
 	userSettings->setValue("ExceptionAssist", false);
 	userSettings->setValue("SUSPENDTYPE", 0);
 	userSettings->setValue("DefaultExceptionMode", 0);
+	userSettings->setValue("EntropyThreshold", 6.4f);
 	userSettings->setValue("COLOR_BP", "Red");
 	userSettings->setValue("COLOR_CALL", "Green");
 	userSettings->setValue("COLOR_JUMP", "Dark green");

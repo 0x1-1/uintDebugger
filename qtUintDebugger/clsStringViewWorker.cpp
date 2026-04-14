@@ -16,13 +16,8 @@
  */
 #include "clsStringViewWorker.h"
 #include "clsMemManager.h"
-//#include "clsPEManager.h"
-//#include "clsMemoryProtector.h"
-//#include "clsHelperClass.h"
-
-#include <fstream>
-
-using namespace std;
+#include "clsPEManager.h"
+#include "clsHelperClass.h"
 
 clsStringViewWorker::clsStringViewWorker(QList<StringProcessingData> dataForProcessing)
 {
@@ -45,160 +40,118 @@ clsStringViewWorker::~clsStringViewWorker()
 void clsStringViewWorker::run()
 {
 	stringList.clear();
-	//clsPEManager *pPEManager = clsPEManager::GetInstance();
+	clsPEManager *pPEManager = clsPEManager::GetInstance();
 
-	//for(int i = 0; i < m_processingData.size(); i++)
-	//{
-	//	PTCHAR moduleName = clsHelperClass::reverseStrip(m_processingData.at(i).filePath, '\\');		
-	//	if(moduleName == NULL) continue;
-	//	
-	//	DWORD64 fileImageBase = clsHelperClass::CalcOffsetForModule(moduleName, NULL, m_processingData.at(i).processID);
-	//	clsMemManager::CFree(moduleName);
-
-	//	QList<IMAGE_SECTION_HEADER> fileSections = pPEManager->getSections(QString::fromWCharArray(m_processingData.at(i).filePath), m_processingData.at(i).processID);
-	//	for(int sectionNum = 0; sectionNum < fileSections.size(); sectionNum++)
-	//	{
-	//		bool worked = false;
-	//		clsMemoryProtector sectionMemory(	m_processingData.at(i).processHandle,
-	//											PAGE_READWRITE,
-	//											fileSections.at(sectionNum).SizeOfRawData,
-	//											(fileSections.at(sectionNum).VirtualAddress + fileImageBase),
-	//											&worked);
-
-	//		LPVOID sectionBuffer = clsMemManager::CAlloc(fileSections.at(sectionNum).SizeOfRawData);
-
-	//		if(ReadProcessMemory(m_processingData.at(i).processHandle, (LPVOID)(fileSections.at(sectionNum).VirtualAddress + fileImageBase), sectionBuffer, fileSections.at(sectionNum).SizeOfRawData, NULL))
-	//		{
-	//			ParseMemoryForAsciiStrings(fileSections.at(sectionNum).VirtualAddress + fileImageBase, sectionBuffer, fileSections.at(sectionNum).SizeOfRawData);
-	//		}
-	//		
-	//		clsMemManager::CFree(sectionBuffer);
-	//	}
-	//}	
-
-	//return;
-
-
-	for(QList<StringProcessingData>::const_iterator i = m_processingData.constBegin(); i != m_processingData.constEnd(); ++i)
+	for(int i = 0; i < m_processingData.size(); i++)
 	{
 		if(isInterruptionRequested())
 			return;
 
-		ifstream inputFile;
-	
-		inputFile.open(i->filePath,ifstream::binary);
-		if(!inputFile.is_open())
-		{
-			MessageBox(NULL, i->filePath, L"Error opening File!", MB_OKCANCEL);
-			return;
-		}
+		const StringProcessingData &entry = m_processingData.at(i);
+		if(entry.processHandle == NULL || entry.processHandle == INVALID_HANDLE_VALUE)
+			continue;
 
-		QString asciiChar;
-		CHAR sT = '\0';
-		while(inputFile.good())
-		{	
+		PTCHAR moduleName = clsHelperClass::reverseStrip(entry.filePath, TEXT('\\'));
+		if(moduleName == NULL)
+			continue;
+
+		DWORD64 fileImageBase = clsHelperClass::CalcOffsetForModule(moduleName, NULL, entry.processID);
+		clsMemManager::CFree(moduleName);
+
+		if(fileImageBase == 0)
+			continue;
+
+		const QString filePath = QString::fromWCharArray(entry.filePath);
+		QList<IMAGE_SECTION_HEADER> sections = pPEManager->getSections(filePath, entry.processID);
+
+		for(int s = 0; s < sections.size(); s++)
+		{
 			if(isInterruptionRequested())
 				return;
 
-			asciiChar.clear();
-			inputFile.get(sT);
-			while(inputFile.good())
+			const DWORD sectionSize = sections.at(s).SizeOfRawData > 0
+				? sections.at(s).SizeOfRawData
+				: sections.at(s).Misc.VirtualSize;
+
+			if(sectionSize == 0)
+				continue;
+
+			const DWORD64 virtualAddr = (DWORD64)sections.at(s).VirtualAddress + fileImageBase;
+
+			LPVOID sectionBuffer = clsMemManager::CAlloc(sectionSize);
+			if(sectionBuffer == NULL)
+				continue;
+
+			SIZE_T bytesRead = 0;
+			if(ReadProcessMemory(entry.processHandle, (LPVOID)virtualAddr, sectionBuffer, sectionSize, &bytesRead) && bytesRead > 0)
 			{
-				if(isInterruptionRequested())
-					return;
-
-				if(((int)sT >= 0x41 && (int)sT <= 0x5a)		||
-					((int)sT >= 0x61 && (int)sT <= 0x7a)	||
-					((int)sT >= 0x30 && (int)sT <= 0x39)	|| 
-					((int)sT == 0x20)						||
-					((int)sT == 0xA))
-					asciiChar.append(sT);
-				else
-				{
-					break;
-				}
-
-				inputFile.get(sT);
+				ParseMemoryForAsciiStrings(virtualAddr, sectionBuffer, (DWORD)bytesRead, entry.processID);
+				ParseMemoryForUnicodeStrings(virtualAddr, sectionBuffer, (DWORD)bytesRead, entry.processID);
 			}
 
-			if((int)sT == 0 && asciiChar.length() > 3)
-			{
-				stringList.append(StringData(inputFile.tellg(), i->processID, asciiChar));
-			}
+			clsMemManager::CFree(sectionBuffer);
 		}
-		inputFile.close();
-		
-		//wifstream uniInputFile;
-		//uniInputFile.open(i.value(),wifstream::binary);
-		//QString uniChar;
-		//
-		//TCHAR uniTempChar[1] = {'\0'};
-		//while(uniInputFile.good())
-		//{
-		//	uniChar.clear();
-		//	uniInputFile.read(uniTempChar,2);
-		//	while(uniInputFile.good())
-		//	{
-		//		if(((short)uniTempChar[0] >= 0x0041 && (short)uniTempChar[0] <= 0x005a)		||
-		//			((short)uniTempChar[0] >= 0x0061 && (short)uniTempChar[0] <= 0x007a)	||
-		//			((short)uniTempChar[0] >= 0x0030 && (short)uniTempChar[0] <= 0x0039)	|| 
-		//			((short)uniTempChar[0] == 0x0020)										||
-		//			((short)uniTempChar[0] == 0x000A))
-		//			uniChar.append(uniTempChar[0]);
-		//		else
-		//		{
-		//			break;
-		//		}
-
-		//		uniInputFile.read(uniTempChar,2);
-		//	}
-
-		//	if((short)uniTempChar[0] == 0x0000 && uniChar.length() > 4)
-		//	{
-		//		StringData newStringData;
-		//		newStringData.DataString = uniChar;
-		//		newStringData.PID = i.key();
-		//		newStringData.StringOffset = uniInputFile.tellg();
-
-		//		stringList.insert(uniInputFile.tellg(),newStringData);
-		//	}
-		//}
-		//uniInputFile.close();
 	}
-
-	 return;
 }
 
-//void clsStringViewWorker::ParseMemoryForAsciiStrings(DWORD64 virtualAddress, LPVOID sectionBuffer, DWORD sectionSize)
-//{
-//	CHAR currentElement = NULL;
-//	QString newString;
-//
-//	for(unsigned int i = 0; i < sectionSize; i++)
-//	{
-//		currentElement = *((PTCHAR)sectionBuffer);
-//
-//		if(((int)currentElement >= 0x41 && (int)currentElement <= 0x5a)		||
-//			((int)currentElement >= 0x61 && (int)currentElement <= 0x7a)	||
-//			((int)currentElement >= 0x30 && (int)currentElement <= 0x39)	|| 
-//			((int)currentElement == 0x20)									||
-//			((int)currentElement == 0xA))
-//		{
-//			newString.append(currentElement);
-//		}
-//		else if((int)currentElement == 0 && newString.length() > 3)
-//		{
-//			StringData newStringData;
-//			newStringData.DataString = newString;
-//			//newStringData.PID = i->processID;
-//			newStringData.StringOffset = virtualAddress;
-//
-//			stringList.append(newStringData);
-//			newString.clear();
-//		}
-//
-//		sectionBuffer = (LPVOID)((DWORD64)sectionBuffer + 1);
-//		virtualAddress++;
-//	}
-//	return;
-//}
+void clsStringViewWorker::ParseMemoryForAsciiStrings(DWORD64 virtualAddress, LPVOID sectionBuffer, DWORD sectionSize, int pid)
+{
+	const char *buf = reinterpret_cast<const char *>(sectionBuffer);
+	QString current;
+	DWORD64 stringStart = virtualAddress;
+
+	for(DWORD i = 0; i < sectionSize; i++)
+	{
+		const char c = buf[i];
+		const bool printable = (c >= 0x20 && c <= 0x7E) || c == 0x09 || c == 0x0A || c == 0x0D;
+
+		if(printable)
+		{
+			if(current.isEmpty())
+				stringStart = virtualAddress + i;
+			current.append(c);
+		}
+		else
+		{
+			if(current.length() >= 4)
+				stringList.append(StringData(stringStart, pid, current));
+			current.clear();
+		}
+	}
+
+	if(current.length() >= 4)
+		stringList.append(StringData(stringStart, pid, current));
+}
+
+void clsStringViewWorker::ParseMemoryForUnicodeStrings(DWORD64 virtualAddress, LPVOID sectionBuffer, DWORD sectionSize, int pid)
+{
+	if(sectionSize < 2)
+		return;
+
+	const wchar_t *buf = reinterpret_cast<const wchar_t *>(sectionBuffer);
+	const DWORD wcount = sectionSize / sizeof(wchar_t);
+	QString current;
+	DWORD64 stringStart = virtualAddress;
+
+	for(DWORD i = 0; i < wcount; i++)
+	{
+		const wchar_t wc = buf[i];
+		const bool printable = (wc >= 0x0020 && wc <= 0x007E) || wc == 0x0009 || wc == 0x000A;
+
+		if(printable)
+		{
+			if(current.isEmpty())
+				stringStart = virtualAddress + (DWORD64)i * sizeof(wchar_t);
+			current.append(QChar(wc));
+		}
+		else
+		{
+			if(current.length() >= 4)
+				stringList.append(StringData(stringStart, pid, current));
+			current.clear();
+		}
+	}
+
+	if(current.length() >= 4)
+		stringList.append(StringData(stringStart, pid, current));
+}

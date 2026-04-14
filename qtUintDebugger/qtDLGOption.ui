@@ -511,6 +511,47 @@
       <string>Unregister .ndb</string>
      </property>
     </widget>
+    <widget class="QLabel" name="labelEntropyThreshold">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>378</y>
+       <width>180</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Entropy threshold (packed warning):</string>
+     </property>
+    </widget>
+    <widget class="QDoubleSpinBox" name="dsbEntropyThreshold">
+     <property name="geometry">
+      <rect>
+       <x>200</x>
+       <y>376</y>
+       <width>70</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="toolTip">
+      <string>Warn when file entropy exceeds this value (0.0 - 8.0). Default: 6.4</string>
+     </property>
+     <property name="minimum">
+      <double>0.000000000000000</double>
+     </property>
+     <property name="maximum">
+      <double>8.000000000000000</double>
+     </property>
+     <property name="singleStep">
+      <double>0.100000000000000</double>
+     </property>
+     <property name="decimals">
+      <number>1</number>
+     </property>
+     <property name="value">
+      <double>6.400000000000000</double>
+     </property>
+    </widget>
    </widget>
    <widget class="QWidget" name="Colors">
     <attribute name="title">

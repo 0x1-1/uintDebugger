@@ -230,12 +230,16 @@ void qtDLGUintDebugger::LoadWidgets()
 	this->callstackView = new qtDLGCallstack(this);
 	this->stackView		= new qtDLGStack(this);
 	this->logView		= new qtDLGLogView(this);
+	this->dlgWatch		= new qtDLGWatch(this);
 
 	this->addDockWidget(Qt::RightDockWidgetArea, this->cpuRegView);
 	this->addDockWidget(Qt::BottomDockWidgetArea, this->callstackView);
 
 	this->addDockWidget(Qt::BottomDockWidgetArea, this->stackView);
 	this->addDockWidget(Qt::BottomDockWidgetArea, this->logView);
+	this->addDockWidget(Qt::BottomDockWidgetArea, this->dlgWatch);
+	dlgWatch->toggleViewAction()->setText("Watch");
+	menuWindows->addAction(dlgWatch->toggleViewAction());
 
 	if (!settingManager->RestoreWindowState(this))
 	{
@@ -368,6 +372,9 @@ void qtDLGUintDebugger::OnDebuggerBreak()
 
 		// display Disassembler
 		DisAsGUI->OnDisplayDisassembly(dwEIP);
+
+		// refresh watch window
+		dlgWatch->Refresh();
 
 		// update Toolbar
 		UpdateStateBar(STATE_SUSPEND);

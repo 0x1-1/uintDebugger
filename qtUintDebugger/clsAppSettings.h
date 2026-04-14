@@ -45,6 +45,9 @@ public:
 	void SaveRecentDebuggedFiles(QStringList recentDebuggedFiles);
 	void LoadRecentDebuggedFiles(QStringList &recentDebuggedFiles);
 
+	float getEntropyThreshold() const;
+	void  setEntropyThreshold(float value);
+
 	static clsAppSettings* SharedInstance();
 
 	clsAppSettings();
@@ -60,6 +63,8 @@ private:
 
 	clsDebugger *m_pDebugger;
 	disasColors	*m_pColors;
+
+	float m_entropyThreshold;
 };
 
 #endif // CLSAPPSETTINGS_H

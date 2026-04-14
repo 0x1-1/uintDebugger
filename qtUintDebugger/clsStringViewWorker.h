@@ -25,7 +25,7 @@
 struct StringProcessingData
 {
 	PTCHAR filePath;
-	//HANDLE processHandle;
+	HANDLE processHandle;
 	int processID;
 };
 
@@ -51,8 +51,8 @@ public:
 private:
 	QList<StringProcessingData> m_processingData;
 
-	//void ParseMemoryForAsciiStrings(DWORD64 virtualAddress, LPVOID sectionBuffer, DWORD sectionSize);
-	//void ParseMemoryForUnicodeStrings(DWORD64 virtualAddress, LPVOID sectionBuffer, DWORD sectionSize);
+	void ParseMemoryForAsciiStrings(DWORD64 virtualAddress, LPVOID sectionBuffer, DWORD sectionSize, int pid);
+	void ParseMemoryForUnicodeStrings(DWORD64 virtualAddress, LPVOID sectionBuffer, DWORD sectionSize, int pid);
 
 protected:
 	void run();

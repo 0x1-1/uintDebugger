@@ -45,6 +45,7 @@ struct BPStruct
 	bool bRestoreBP;
 	PTCHAR moduleName;
 	PTCHAR comment;     /* optional user label; heap-allocated like moduleName, NULL = none */
+	QString sCondition; /* expression condition; empty = always break */
 };
 
 class clsBreakpointManager : public QObject
@@ -69,7 +70,11 @@ public:
 	bool BreakpointClear();
 	bool BreakpointAdd(DWORD breakpointType, DWORD typeFlag, DWORD processID, DWORD64 breakpointOffset, int breakpointSize, DWORD breakpointHandleType, DWORD breakpointDataType, DWORD hitTarget = 0, DWORD tid = 0);
 	bool BreakpointInit(DWORD processID, bool isThread = false);
-	bool BreakpointFind(DWORD64 breakpointOffset, int breakpointType, DWORD processID, bool takeAll, BPStruct** pBreakpointSearched);
+	bool BreakpointFind(DWORD64 breakpointOffset, int breakpointType, DWORD processID, bool takeAll, BPStruct &outBP);
+
+	void BreakpointSetRestoreFlag(DWORD64 offset, int bpType, DWORD pid, bool value);
+	bool BreakpointIncrementHitCount(DWORD64 offset, int bpType, DWORD pid, bool takeAll);
+	bool BreakpointSetCondition(DWORD64 offset, DWORD bpType, const QString &condition);
 
 	void BreakpointCleanup();
 	void BreakpointUpdateOffsets(HANDLE processHandle, DWORD processID);

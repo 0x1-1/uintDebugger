@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>688</width>
-    <height>289</height>
+    <height>313</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -92,6 +92,11 @@
      <string>Comment</string>
     </property>
    </column>
+   <column>
+    <property name="text">
+     <string>Condition</string>
+    </property>
+   </column>
   </widget>
   <widget class="QGroupBox" name="groupBox">
    <property name="geometry">
@@ -99,7 +104,7 @@
      <x>4</x>
      <y>178</y>
      <width>681</width>
-     <height>106</height>
+     <height>130</height>
     </rect>
    </property>
    <property name="sizePolicy">
@@ -326,6 +331,32 @@
      <string>Optional breakpoint label...</string>
     </property>
    </widget>
+   <widget class="QLabel" name="labelCondition">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>102</y>
+      <width>60</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Condition :</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="leCondition">
+    <property name="geometry">
+     <rect>
+      <x>68</x>
+      <y>102</y>
+      <width>607</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="placeholderText">
+     <string>e.g. eax==5  (empty = always break)</string>
+    </property>
+   </widget>
    <widget class="QPushButton" name="pbClose">
     <property name="geometry">
      <rect>
@@ -463,6 +494,11 @@
     <item>
      <property name="text">
       <string>UD2</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>LONGINT3</string>
      </property>
     </item>
    </widget>

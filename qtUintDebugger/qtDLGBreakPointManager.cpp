@@ -85,9 +85,10 @@ void qtDLGBreakPointManager::OnUpdate(BPStruct newBP,int breakpointType)
 
 			switch(newBP.dwDataType)
 			{
-				case BP_SW_HLT: TempString.append(" - HLT"); break;
-				case BP_SW_UD2: TempString.append(" - UD2"); break;
-				default:		TempString.append(" - INT3"); break;
+				case BP_SW_HLT:     TempString.append(" - HLT"); break;
+				case BP_SW_UD2:     TempString.append(" - UD2"); break;
+				case BP_SW_LONGINT3:TempString.append(" - LONGINT3"); break;
+				default:            TempString.append(" - INT3"); break;
 			}
 
 			break;
@@ -126,6 +127,9 @@ void qtDLGBreakPointManager::OnUpdate(BPStruct newBP,int breakpointType)
 
 		tblBPs->setItem(tblBPs->rowCount() - 1,7,
 			new QTableWidgetItem(newBP.comment != NULL ? QString::fromWCharArray(newBP.comment) : QString()));
+
+		tblBPs->setItem(tblBPs->rowCount() - 1,8,
+			new QTableWidgetItem(newBP.sCondition));
 	}
 	else if(newBP.dwHandle == BP_OFFSETUPDATE)
 	{ // BP got new Offset
@@ -220,6 +224,8 @@ void qtDLGBreakPointManager::OnAddUpdate()
 			dwBreakpointDataType = BP_SW_HLT;
 		else if(cbOpcode->currentText().compare("UD2") == 0)
 			dwBreakpointDataType = BP_SW_UD2;
+		else if(cbOpcode->currentText().compare("LONGINT3") == 0)
+			dwBreakpointDataType = BP_SW_LONGINT3;
 	}
 	else if(cbType->currentText().compare("Hardware BP") == 0)
 		dwType = HARDWARE_BP;
@@ -243,6 +249,11 @@ void qtDLGBreakPointManager::OnAddUpdate()
 		if(pBPMgr != NULL)
 			pBPMgr->SetBPComment(dwOffset, dwType, commentText);
 	}
+
+	// Attach condition expression (may be empty — clears any existing condition)
+	clsBreakpointManager *pBPMgr = clsBreakpointManager::GetInstance();
+	if(pBPMgr != NULL)
+		pBPMgr->BreakpointSetCondition(dwOffset, dwType, leCondition->text().trimmed());
 }
 
 void qtDLGBreakPointManager::OnSelectedBPChanged(int iRow,int iCol)
@@ -258,6 +269,7 @@ void qtDLGBreakPointManager::OnSelectedBPChanged(int iRow,int iCol)
 		sbHitTarget->setValue(0);
 
 	leComment->setText(tblBPs->item(iRow,7) != nullptr ? tblBPs->item(iRow,7)->text() : QString());
+	leCondition->setText(tblBPs->item(iRow,8) != nullptr ? tblBPs->item(iRow,8)->text() : QString());
 
 	DWORD	selectedBreakType	= NULL,
 			selectedBPSize		= tblBPs->item(iRow,3)->text().toInt();
@@ -294,12 +306,14 @@ void qtDLGBreakPointManager::OnSelectedBPChanged(int iRow,int iCol)
 
 		cbOpcode->setEnabled(true);
 
-		if(tblBPs->item(iRow,2)->text().contains("INT3"))
-			cbOpcode->setCurrentIndex(0);
-		else if(tblBPs->item(iRow,2)->text().contains("HLT"))
-			cbOpcode->setCurrentIndex(1);
+		if(tblBPs->item(iRow,2)->text().contains("LONGINT3"))
+			cbOpcode->setCurrentIndex(3);
 		else if(tblBPs->item(iRow,2)->text().contains("UD2"))
 			cbOpcode->setCurrentIndex(2);
+		else if(tblBPs->item(iRow,2)->text().contains("HLT"))
+			cbOpcode->setCurrentIndex(1);
+		else
+			cbOpcode->setCurrentIndex(0);
 		
 	}
 	else if(QString::compare(tblBPs->item(iRow,2)->text(),"Hardware BP") == 0)
@@ -489,5 +503,10 @@ void qtDLGBreakPointManager::OnBPOpcodeSelectionChanged(const QString &selectedI
 	{
 		cbSize->setCurrentIndex(1);
 		cbSize->setEnabled(false);
-	}	
+	}
+	else if(selectedItemText.contains("LONGINT3"))
+	{
+		cbSize->setCurrentIndex(1);
+		cbSize->setEnabled(false);
+	}
 }

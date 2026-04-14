@@ -21,21 +21,7 @@
 
 #include <QMenu>
 
-namespace
-{
-void SetPlaceholderRow(QTableWidget *table, const QString &message)
-{
-	table->clearSpans();
-	table->clearContents();
-	table->setRowCount(1);
-
-	QTableWidgetItem *placeholder = new QTableWidgetItem(message);
-	placeholder->setFlags(Qt::ItemIsEnabled);
-	placeholder->setTextAlignment(Qt::AlignCenter);
-	table->setItem(0, 0, placeholder);
-	table->setSpan(0, 0, 1, table->columnCount());
-}
-}
+#include "uiHelpers.h"
 
 qtDLGStringView::qtDLGStringView(QWidget *parent, Qt::WindowFlags flags, qint32 processID)
 	: QWidget(parent, flags),
@@ -100,8 +86,9 @@ void qtDLGStringView::DataProcessing()
 		for(int i = m_forEntry; i < m_forEnd; i++)
 		{
 			if(i >= m_pMainWindow->coreDebugger->PIDs.size()) break;
-			newData.filePath  = m_pMainWindow->coreDebugger->PIDs[i].sFileName;
-			newData.processID = m_pMainWindow->coreDebugger->PIDs[i].dwPID;
+			newData.filePath      = m_pMainWindow->coreDebugger->PIDs[i].sFileName;
+			newData.processHandle = m_pMainWindow->coreDebugger->PIDs[i].hProc;
+			newData.processID     = m_pMainWindow->coreDebugger->PIDs[i].dwPID;
 			dataForProcessing.append(newData);
 		}
 	}

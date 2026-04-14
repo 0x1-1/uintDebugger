@@ -298,7 +298,7 @@ bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, D
 		{
 		case SOFTWARE_BP:
 			{
-				/*if(breakpointDataType == BP_SW_LONGINT3)
+				if(breakpointDataType == BP_SW_LONGINT3)
 				{
 					breakpointSize = 2;
 
@@ -307,7 +307,7 @@ bool clsBreakpointManager::BreakpointAdd(DWORD breakpointType, DWORD typeFlag, D
 
 					breakpointOffset += 1;
 				}
-				else*/ if(breakpointDataType == BP_SW_UD2)
+				else if(breakpointDataType == BP_SW_UD2)
 				{
 					breakpointSize = 2;
 
@@ -554,70 +554,111 @@ void clsBreakpointManager::BreakpointCleanup()
 	}
 }
 
-bool clsBreakpointManager::BreakpointFind(DWORD64 breakpointOffset, int breakpointType, DWORD processID, bool takeAll, BPStruct** pBreakpointSearched)
+bool clsBreakpointManager::BreakpointFind(DWORD64 breakpointOffset, int breakpointType, DWORD processID, bool takeAll, BPStruct &outBP)
 {
 	QReadLocker locker(&m_bpLock);
-	DWORD tempSearchPID = processID;
-	BPStruct *pTempBP;
+	const DWORD tempSearchPID = takeAll ? (DWORD)-1 : processID;
 
-	if(takeAll)
-		tempSearchPID = -1;
-
+	QList<BPStruct> *pList = nullptr;
 	switch(breakpointType)
 	{
-	case SOFTWARE_BP:
+	case SOFTWARE_BP:  pList = &SoftwareBPs;  break;
+	case MEMORY_BP:    pList = &MemoryBPs;    break;
+	case HARDWARE_BP:  pList = &HardwareBPs;  break;
+	default: return false;
+	}
+
+	for(int i = 0; i < pList->size(); i++)
+	{
+		const BPStruct &bp = (*pList)[i];
+		if(bp.dwOffset == breakpointOffset &&
+			(bp.dwPID == processID || bp.dwPID == tempSearchPID))
 		{
-			for(int i = 0; i < SoftwareBPs.size(); i++)
-			{
-				pTempBP = &SoftwareBPs[i];
-
-				if(pTempBP->dwOffset == breakpointOffset && 
-					(pTempBP->dwPID == processID || pTempBP->dwPID == tempSearchPID))
-				{
-					*pBreakpointSearched = pTempBP;
-
-					return true;
-				}
-			}
-
-			break;
-		}
-	case MEMORY_BP:
-		{
-			for(int i = 0; i < MemoryBPs.size(); i++)
-			{
-				pTempBP = &MemoryBPs[i];
-
-				if(pTempBP->dwOffset == breakpointOffset && 
-					(pTempBP->dwPID == processID || pTempBP->dwPID == tempSearchPID))
-				{
-					*pBreakpointSearched = pTempBP;
-
-					return true;
-				}
-			}
-
-			break;
-		}
-	case HARDWARE_BP:
-		{
-			for(int i = 0; i < HardwareBPs.size(); i++)
-			{
-				pTempBP = &HardwareBPs[i];
-
-				if(pTempBP->dwOffset == breakpointOffset && 
-					(pTempBP->dwPID == processID || pTempBP->dwPID == tempSearchPID))
-				{
-					*pBreakpointSearched = pTempBP;
-
-					return true;
-				}
-			}
-
-			break;
+			outBP = bp; // value copy while lock is held
+			return true;
 		}
 	}
 
+	return false;
+}
+
+void clsBreakpointManager::BreakpointSetRestoreFlag(DWORD64 offset, int bpType, DWORD pid, bool value)
+{
+	QWriteLocker locker(&m_bpLock);
+	QList<BPStruct> *pList = nullptr;
+	switch(bpType)
+	{
+	case SOFTWARE_BP:  pList = &SoftwareBPs;  break;
+	case MEMORY_BP:    pList = &MemoryBPs;    break;
+	case HARDWARE_BP:  pList = &HardwareBPs;  break;
+	default: return;
+	}
+
+	for(int i = 0; i < pList->size(); i++)
+	{
+		BPStruct &bp = (*pList)[i];
+		if(bp.dwOffset == offset && (bp.dwPID == pid || bp.dwPID == (DWORD)-1))
+		{
+			bp.bRestoreBP = value;
+			return;
+		}
+	}
+}
+
+bool clsBreakpointManager::BreakpointIncrementHitCount(DWORD64 offset, int bpType, DWORD pid, bool takeAll)
+{
+	QWriteLocker locker(&m_bpLock);
+	const DWORD searchPID = takeAll ? (DWORD)-1 : pid;
+
+	QList<BPStruct> *pList = nullptr;
+	switch(bpType)
+	{
+	case SOFTWARE_BP:  pList = &SoftwareBPs;  break;
+	case MEMORY_BP:    pList = &MemoryBPs;    break;
+	case HARDWARE_BP:  pList = &HardwareBPs;  break;
+	default: return true;
+	}
+
+	for(int i = 0; i < pList->size(); i++)
+	{
+		BPStruct &bp = (*pList)[i];
+		if(bp.dwOffset == offset && (bp.dwPID == pid || bp.dwPID == searchPID))
+		{
+			if(bp.dwHitTarget == 0)
+				return true; // break every hit
+
+			if(++bp.dwHitCount >= bp.dwHitTarget)
+			{
+				bp.dwHitCount = 0;
+				return true; // target reached — break
+			}
+			return false; // not yet
+		}
+	}
+
+	return true; // not found: don't suppress
+}
+
+bool clsBreakpointManager::BreakpointSetCondition(DWORD64 offset, DWORD bpType, const QString &condition)
+{
+	QList<BPStruct> *pList = nullptr;
+	switch(bpType)
+	{
+	case SOFTWARE_BP:  pList = &SoftwareBPs; break;
+	case MEMORY_BP:    pList = &MemoryBPs;   break;
+	case HARDWARE_BP:  pList = &HardwareBPs; break;
+	default: return false;
+	}
+
+	QWriteLocker locker(&m_bpLock);
+	for(int i = 0; i < pList->size(); i++)
+	{
+		if((*pList)[i].dwOffset == offset)
+		{
+			(*pList)[i].sCondition = condition;
+			return true;
+		}
+	}
 	return false;
 }
 

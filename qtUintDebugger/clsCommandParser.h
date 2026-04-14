@@ -25,6 +25,7 @@
  *  bp  <addr>              — software BP (INT3) at address
  *  bph <addr>              — hardware BP (exec) at address
  *  bpm <addr>              — memory BP (access) at address
+ *  bpc <addr> <cond>       — conditional software BP (e.g. bpc 0x401000 eax==5)
  *  bd  <addr>              — delete BP at address
  *  bc                      — clear all breakpoints
  *  g                       — resume (continue) debugging
@@ -32,6 +33,9 @@
  *  p                       — step over
  *  r                       — dump registers to log
  *  db  <addr>              — hex dump 128 bytes at address to log
+ *  eval <expr>             — evaluate expression, print result to log
+ *  w   <expr>              — add expression to watch window
+ *  x   <module>            — print module base address to log
  *
  *  Addresses may be hex (0x prefix optional) or module::export notation.
  */

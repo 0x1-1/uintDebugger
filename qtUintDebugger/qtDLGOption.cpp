@@ -220,6 +220,8 @@ void qtDLGOption::OnSave()
 	m_pMainWindow->disasColor->colorMove = comboMove->currentText();
 	m_pMainWindow->disasColor->colorMath = comboMath->currentText();
 
+	m_pSettings->setEntropyThreshold((float)dsbEntropyThreshold->value());
+
 	m_pSettings->SaveDebuggerSettings();
 	m_pSettings->SaveDisassemblerColor();
 	m_pSettings->SaveDefaultJITDebugger(m_originalJIT,m_originalJITWOW64);
@@ -347,6 +349,8 @@ void qtDLGOption::OnLoad()
 
 	if((itemIndex = getIndex(m_pMainWindow->disasColor->colorMath)) != -1)
 		comboMath->setCurrentIndex(itemIndex);
+
+	dsbEntropyThreshold->setValue(m_pSettings->getEntropyThreshold());
 
 	// Read JIT Settings
 	QSettings JIT("HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug",QSettings::NativeFormat);

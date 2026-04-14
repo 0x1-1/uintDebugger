@@ -20,8 +20,10 @@
 #include "clsHelperClass.h"
 #include "clsAPIImport.h"
 #include "clsMemManager.h"
+#include "clsExpressionEvaluator.h"
 
 #include "qtDLGUintDebugger.h"
+#include "qtDLGWatch.h"
 
 #include <Windows.h>
 
@@ -281,21 +283,109 @@ QString clsCommandParser::Execute(const QString &rawCmd)
         return out;
     }
 
+    // --- eval : evaluate expression ----------------------------------------
+    if(verb == "eval")
+    {
+        if(arg.isEmpty())
+            return QStringLiteral("[cmd] eval: expression required.");
+
+        HANDLE hProc = dbg->GetCurrentProcessHandle();
+        bool isWow64 = false;
+#ifdef _AMD64_
+        BOOL bWow = false;
+        if(clsAPIImport::pIsWow64Process)
+            clsAPIImport::pIsWow64Process(hProc, &bWow);
+        isWow64 = (bWow != 0);
+#endif
+        const void *pCtx = isWow64
+            ? static_cast<const void *>(&dbg->wowProcessContext)
+            : static_cast<const void *>(&dbg->ProcessContext);
+
+        bool ok = false;
+        quint64 val = clsExpressionEvaluator::evaluate(arg, hProc, pCtx, isWow64, &ok);
+        if(!ok)
+            return QStringLiteral("[eval] %1 = <parse error>").arg(arg);
+        return QStringLiteral("[eval] %1 = 0x%2 (%3)").arg(arg)
+            .arg(val, 0, 16)
+            .arg(val);
+    }
+
+    // --- bpc : conditional software BP ------------------------------------
+    if(verb == "bpc")
+    {
+        // Syntax: bpc <addr> <condition>
+        const int condSep = arg.indexOf(' ');
+        if(condSep < 0)
+            return QStringLiteral("[cmd] bpc: usage: bpc <addr> <condition>");
+
+        const QString addrToken = arg.left(condSep).trimmed();
+        const QString condition = arg.mid(condSep + 1).trimmed();
+
+        bool ok = false;
+        quint64 addr = ResolveAddress(addrToken, ok);
+        if(!ok || addr == 0)
+            return QStringLiteral("[cmd] bpc: cannot resolve '%1'.").arg(addrToken);
+
+        DWORD pid = dbg->GetCurrentPID();
+        if(!clsBreakpointManager::BreakpointInsert(SOFTWARE_BP, BP_EXEC, pid, addr, 1, BP_KEEP))
+            return QStringLiteral("[cmd] bpc: failed to set BP at 0x%1.").arg(addr,16,16,QChar('0'));
+
+        clsBreakpointManager *bpm = clsBreakpointManager::GetInstance();
+        if(bpm && !condition.isEmpty())
+            bpm->BreakpointSetCondition(addr, SOFTWARE_BP, condition);
+
+        return QStringLiteral("[cmd] Conditional SW BP at 0x%1  cond: %2")
+            .arg(addr, 16, 16, QChar('0')).arg(condition);
+    }
+
+    // --- w : add watch expression ------------------------------------------
+    if(verb == "w")
+    {
+        if(arg.isEmpty())
+            return QStringLiteral("[cmd] w: expression required.");
+        if(pMain->dlgWatch)
+        {
+            pMain->dlgWatch->AddExpression(arg);
+            return QStringLiteral("[watch] Added: %1").arg(arg);
+        }
+        return QStringLiteral("[cmd] w: watch window not available.");
+    }
+
+    // --- x : show module base ----------------------------------------------
+    if(verb == "x")
+    {
+        if(arg.isEmpty())
+            return QStringLiteral("[cmd] x: module name required.");
+
+        DWORD pid = dbg->GetCurrentPID();
+        quint64 base = clsHelperClass::CalcOffsetForModule(
+            (PTCHAR)arg.toLower().toStdWString().c_str(), NULL, pid);
+
+        if(base == 0)
+            return QStringLiteral("[cmd] x: module '%1' not found.").arg(arg);
+
+        return QStringLiteral("[x] %1  base=0x%2").arg(arg).arg(base, 16, 16, QChar('0'));
+    }
+
     // --- help --------------------------------------------------------------
     if(verb == "?" || verb == "help")
     {
         return QStringLiteral(
             "[cmd] Commands:\n"
-            "  bp  <addr>   — software BP (INT3)\n"
-            "  bph <addr>   — hardware BP (exec)\n"
-            "  bpm <addr>   — memory BP (access)\n"
-            "  bd  <addr>   — delete BP at address\n"
-            "  bc           — clear all BPs\n"
-            "  g            — resume\n"
-            "  t            — step in\n"
-            "  p            — step over\n"
-            "  r            — dump registers\n"
-            "  db  <addr>   — hex dump 128 bytes\n"
+            "  bp  <addr>          — software BP (INT3)\n"
+            "  bph <addr>          — hardware BP (exec)\n"
+            "  bpm <addr>          — memory BP (access)\n"
+            "  bpc <addr> <cond>   — conditional software BP\n"
+            "  bd  <addr>          — delete BP at address\n"
+            "  bc                  — clear all BPs\n"
+            "  g                   — resume\n"
+            "  t                   — step in\n"
+            "  p                   — step over\n"
+            "  r                   — dump registers\n"
+            "  db  <addr>          — hex dump 128 bytes\n"
+            "  eval <expr>         — evaluate expression\n"
+            "  w   <expr>          — add to watch window\n"
+            "  x   <module>        — show module base address\n"
             "  <addr>: hex (0x optional) or module::export");
     }
 

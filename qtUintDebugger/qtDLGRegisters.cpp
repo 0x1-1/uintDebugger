@@ -25,6 +25,7 @@
 #include <QMenu>
 
 #include <cmath>
+#include <cstring>
 #include <limits>
 
 qtDLGRegisters::qtDLGRegisters(QWidget *parent)
@@ -449,52 +450,36 @@ void qtDLGRegisters::PrintValueInTable(QTableWidget *pTable, QString regName, QS
 	pTable->setItem(pTable->rowCount() - 1,1,new QTableWidgetItem(regValue));
 }
 
-// FIXME: maybe rewrite this function
-double qtDLGRegisters::readFloat80(const uint8_t buffer[10]) 
+double qtDLGRegisters::readFloat80(const uint8_t buffer[10])
 {
-	 //80 bit floating point value according to IEEE-754:
-    //1 bit sign, 15 bit exponent, 64 bit mantissa
+    // IEEE 754 80-bit extended precision: 1 sign, 15 exponent, 64 mantissa (explicit integer bit)
+    uint16_t exponent;
+    uint64_t mantissa;
+    memcpy(&exponent, &buffer[8], sizeof(exponent));
+    memcpy(&mantissa, &buffer[0], sizeof(mantissa));
 
-    const uint16_t SIGNBIT    = 1 << 15;
-    const uint16_t EXP_BIAS   = (1 << 14) - 1; // 2^(n-1) - 1 = 16383
-    const uint16_t SPECIALEXP = (1 << 15) - 1; // all bits set
-    const uint64_t HIGHBIT    = (uint64_t)1 << 63;
-    const uint64_t QUIETBIT   = (uint64_t)1 << 62;
+    const bool sign = (exponent >> 15) & 1;
+    exponent &= 0x7FFF;
 
-    // Extract sign, exponent and mantissa
-    uint16_t exponent = *((uint16_t*)&buffer[8]);
-    uint64_t mantissa = *((uint64_t*)&buffer[0]);
-
-    double sign = (exponent & SIGNBIT) ? -1.0 : 1.0;
-    exponent   &= ~SIGNBIT;
-
-    // Check for undefined values
-    if((!exponent && (mantissa & HIGHBIT)) || (exponent && !(mantissa & HIGHBIT))) {
-        return std::numeric_limits<double>::quiet_NaN();
+    if(exponent == 0x7FFF)
+    {
+        return (mantissa & UINT64_C(0x7FFFFFFFFFFFFFFF)) == 0
+            ? (sign ? -std::numeric_limits<double>::infinity()
+                    :  std::numeric_limits<double>::infinity())
+            : std::numeric_limits<double>::quiet_NaN();
     }
 
-    // Check for special values (infinity, NaN)
-    if(exponent == 0) {
-        if(mantissa == 0) {
-            return sign * 0.0;
-        } else {
-            // denormalized
-        }
-    } else if(exponent == SPECIALEXP) {
-        if(!(mantissa & ~HIGHBIT)) {
-            return sign * std::numeric_limits<double>::infinity();
-        } else {
-            if(mantissa & QUIETBIT) {
-                return std::numeric_limits<double>::quiet_NaN();
-            } else {
-                return std::numeric_limits<double>::signaling_NaN();
-            }
-        }
+    if(exponent == 0)
+    {
+        if(mantissa == 0) return sign ? -0.0 : 0.0;
+        // Denormal: exponent bias is -16382, integer bit is explicit zero at bit 63
+        return sign ? -ldexp((double)mantissa, -16382 - 63)
+                    :  ldexp((double)mantissa, -16382 - 63);
     }
 
-    //value = (-1)^s * (m / 2^63) * 2^(e - 16383)
-    double significand = ((double)mantissa / ((uint64_t)1 << 63));
-    return sign * ldexp(significand, exponent - EXP_BIAS);
+    // Normal: explicit integer bit in mantissa bit 63
+    return sign ? -ldexp((double)mantissa, exponent - 16383 - 63)
+                :  ldexp((double)mantissa, exponent - 16383 - 63);
 }
 
 DWORD qtDLGRegisters::ToggleFlag(DWORD eFlags, QString selectedElement)

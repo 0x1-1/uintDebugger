@@ -114,6 +114,7 @@ bool clsProjectFile::WriteDataToFile(const QString &saveFilePath)
 	WriteBookmarkDataToFile(xmlWriter);
 	WritePatchDataToFile(xmlWriter);
 	WriteBreakpointDataToFile(xmlWriter);
+	WriteWatchDataToFile(xmlWriter);
 
 	xmlWriter.writeEndElement();
 	xmlWriter.writeEndDocument();
@@ -215,6 +216,9 @@ void clsProjectFile::WriteBreakpointListToFile(QList<BPStruct> &tempBP, int bpTy
 			if(tempBP.at(i).comment != NULL)
 				xmlWriter.writeTextElement("breakpointComment", QString::fromWCharArray(tempBP.at(i).comment));
 
+			if(!tempBP.at(i).sCondition.isEmpty())
+				xmlWriter.writeTextElement("breakpointCondition", tempBP.at(i).sCondition);
+
 			xmlWriter.writeEndElement();
 		}
 	}
@@ -261,6 +265,10 @@ bool clsProjectFile::ReadDataFromFile(const QString &loadFilePath)
 			else if(xmlReader.name().contains(u"BREAKPOINT_"))
 			{
 				ReadBreakpointDataFromFile(xmlReader);
+			}
+			else if(xmlReader.name().contains(u"WATCH_"))
+			{
+				ReadWatchDataFromFile(xmlReader);
 			}
 		}
 	}
@@ -356,7 +364,7 @@ void clsProjectFile::ReadBookmarkDataFromFile(QXmlStreamReader &xmlReader)
 
 void clsProjectFile::ReadBreakpointDataFromFile(QXmlStreamReader &xmlReader)
 {
-	QString bpOffset, bpSize, bpTypeFlag, bpModName, bpDataType, bpHitTarget, bpTID, bpComment;
+	QString bpOffset, bpSize, bpTypeFlag, bpModName, bpDataType, bpHitTarget, bpTID, bpComment, bpCondition;
 	int bpType = NULL;
 
 	if(xmlReader.name().contains(u"BREAKPOINT_SW_BP"))
@@ -412,6 +420,11 @@ void clsProjectFile::ReadBreakpointDataFromFile(QXmlStreamReader &xmlReader)
 				xmlReader.readNext();
 				bpComment = xmlReader.text().toString();
 			}
+			else if(xmlReader.name() == "breakpointCondition")
+			{
+				xmlReader.readNext();
+				bpCondition = xmlReader.text().toString();
+			}
 		}
 
 		xmlReader.readNext();
@@ -439,6 +452,9 @@ void clsProjectFile::ReadBreakpointDataFromFile(QXmlStreamReader &xmlReader)
 			if(newBreakpoint.comment != NULL)
 				bpComment.toWCharArray(newBreakpoint.comment);
 		}
+
+		if(!bpCondition.isEmpty())
+			newBreakpoint.sCondition = bpCondition;
 
 		newBreakpoint.dwHandle = BP_KEEP;
 		newBreakpoint.dwPID = -1;
@@ -522,4 +538,55 @@ void clsProjectFile::ReadPatchDataFromFile(QXmlStreamReader &xmlReader)
 		
 		qtDLGPatchManager::InsertPatchFromProjectFile(newPatch);
 	}
+}
+
+void clsProjectFile::WriteWatchDataToFile(QXmlStreamWriter &xmlWriter)
+{
+	if(!m_pMainWindow->dlgWatch)
+		return;
+
+	const QList<qtDLGWatch::WatchEntry> &entries = m_pMainWindow->dlgWatch->entries();
+	for(int i = 0; i < entries.size(); i++)
+	{
+		xmlWriter.writeStartElement(QString("WATCH_%1").arg(i));
+		xmlWriter.writeTextElement("watchExpression", entries.at(i).expression);
+		xmlWriter.writeTextElement("watchSize",       QString::number(entries.at(i).byteSize));
+		if(!entries.at(i).note.isEmpty())
+			xmlWriter.writeTextElement("watchNote", entries.at(i).note);
+		xmlWriter.writeEndElement();
+	}
+}
+
+void clsProjectFile::ReadWatchDataFromFile(QXmlStreamReader &xmlReader)
+{
+	QString wExpr, wNote;
+	int wSize = 4;
+
+	xmlReader.readNext();
+
+	while(!(xmlReader.tokenType() == QXmlStreamReader::EndElement && xmlReader.name().contains(u"WATCH_")))
+	{
+		if(xmlReader.tokenType() == QXmlStreamReader::StartElement)
+		{
+			if(xmlReader.name() == "watchExpression")
+			{
+				xmlReader.readNext();
+				wExpr = xmlReader.text().toString();
+			}
+			else if(xmlReader.name() == "watchSize")
+			{
+				xmlReader.readNext();
+				wSize = xmlReader.text().toString().toInt();
+			}
+			else if(xmlReader.name() == "watchNote")
+			{
+				xmlReader.readNext();
+				wNote = xmlReader.text().toString();
+			}
+		}
+		xmlReader.readNext();
+	}
+
+	if(!wExpr.isEmpty() && m_pMainWindow->dlgWatch)
+		m_pMainWindow->dlgWatch->AddExpression(wExpr, wSize, wNote);
 }

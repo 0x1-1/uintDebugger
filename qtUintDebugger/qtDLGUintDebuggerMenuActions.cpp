@@ -175,7 +175,7 @@ void qtDLGUintDebugger::action_DebugStart()
 		}
 		
 		float fileEntropie = PEManager->getEntropie(coreDebugger->GetTarget());
-		if(fileEntropie >= 6.4) // TODO: more research for the value
+		if(fileEntropie >= clsAppSettings::SharedInstance()->getEntropyThreshold())
 		{
 			QMessageBox::information(this, "uintDebugger", "It seems that this file is packed or encrypted!\nThis can lead to wrong display (or none) of disassembly!", QMessageBox::Ok, QMessageBox::Ok);
 		}
@@ -211,7 +211,7 @@ void qtDLGUintDebugger::action_DebugAttachStart(int iPID,QString FilePath)
 		}
 
 		float fileEntropie = PEManager->getEntropie(FilePath);
-		if(fileEntropie >= 6.4) // TODO: more research for the value
+		if(fileEntropie >= clsAppSettings::SharedInstance()->getEntropyThreshold())
 		{
 			QMessageBox::information(this, "uintDebugger", "It seems that this file is packed or encrypted!\nThis can lead to wrong display (or none) of disassembly!", QMessageBox::Ok, QMessageBox::Ok);
 		}

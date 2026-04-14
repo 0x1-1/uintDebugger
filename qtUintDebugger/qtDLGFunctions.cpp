@@ -21,21 +21,7 @@
 
 using namespace std;
 
-namespace
-{
-void SetPlaceholderRow(QTableWidget *table, const QString &message)
-{
-	table->clearSpans();
-	table->clearContents();
-	table->setRowCount(1);
-
-	QTableWidgetItem *placeholder = new QTableWidgetItem(message);
-	placeholder->setFlags(Qt::ItemIsEnabled);
-	placeholder->setTextAlignment(Qt::AlignCenter);
-	table->setItem(0, 0, placeholder);
-	table->setSpan(0, 0, 1, table->columnCount());
-}
-}
+#include "uiHelpers.h"
 
 qtDLGFunctions::qtDLGFunctions(qint32 processID, QWidget *parent, Qt::WindowFlags flags)
 	: QWidget(parent, flags),

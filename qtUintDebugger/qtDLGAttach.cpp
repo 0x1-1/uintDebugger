@@ -28,21 +28,7 @@
 #include <QShortcut>
 #include <QTimer>
 
-namespace
-{
-void SetPlaceholderRow(QTableWidget *table, const QString &message)
-{
-	table->clearSpans();
-	table->clearContents();
-	table->setRowCount(1);
-
-	QTableWidgetItem *placeholder = new QTableWidgetItem(message);
-	placeholder->setFlags(Qt::ItemIsEnabled);
-	placeholder->setTextAlignment(Qt::AlignCenter);
-	table->setItem(0, 0, placeholder);
-	table->setSpan(0, 0, 1, table->columnCount());
-}
-}
+#include "uiHelpers.h"
 
 qtDLGAttach::qtDLGAttach(QWidget *parent, Qt::WindowFlags flags)
 	: QDialog(parent, flags)
