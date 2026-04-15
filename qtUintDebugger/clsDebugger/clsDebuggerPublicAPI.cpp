@@ -25,6 +25,38 @@
 
 using namespace std;
 
+namespace
+{
+QVector<PIDStruct> SnapshotPIDs(clsDebugger *debugger)
+{
+	QReadLocker locker(&debugger->m_stateLock);
+	return debugger->PIDs;
+}
+
+bool TryGetTrackedProcess(clsDebugger *debugger, DWORD dwPID, HANDLE *hProcess, bool *isRunning = NULL)
+{
+	QReadLocker locker(&debugger->m_stateLock);
+	for(int i = 0; i < debugger->PIDs.size(); ++i)
+	{
+		if(debugger->PIDs[i].dwPID == dwPID)
+		{
+			if(hProcess != NULL)
+				*hProcess = debugger->PIDs[i].hProc;
+			if(isRunning != NULL)
+				*isRunning = debugger->PIDs[i].bRunning;
+			return true;
+		}
+	}
+	return false;
+}
+
+DWORD CurrentSuspendType(clsDebugger *debugger)
+{
+	QReadLocker locker(&debugger->m_settingsLock);
+	return debugger->dbgSettings.dwSuspendType;
+}
+}
+
 bool clsDebugger::SignalDebugEvent()
 {
 	return SetEvent(m_debugEvent) != 0;
@@ -38,12 +70,13 @@ bool clsDebugger::DetachFromProcess()
 
 	m_pBreakpointManager->BreakpointClear();
 
-	for(int d = 0; d < PIDs.size(); d++)
+	const QVector<PIDStruct> pidSnapshot = SnapshotPIDs(this);
+	for(int d = 0; d < pidSnapshot.size(); d++)
 	{
-		if(!CheckProcessState(PIDs[d].dwPID))
+		if(!CheckProcessState(pidSnapshot[d].dwPID))
 			break;
-		DebugBreakProcess(PIDs[d].hProc);
-		SetEvent(m_debugEvent);
+		DebugBreakProcess(pidSnapshot[d].hProc);
+		SignalDebugEvent();
 	}
 	
 	return true;
@@ -58,23 +91,24 @@ bool clsDebugger::AttachToProcess(DWORD dwPID)
 
 bool clsDebugger::SuspendDebuggingAll()
 {
-	for(int i = 0;i < PIDs.size();i++)
-		SuspendDebugging(PIDs[i].dwPID);
+	const QVector<PIDStruct> pidSnapshot = SnapshotPIDs(this);
+	for(int i = 0; i < pidSnapshot.size(); i++)
+		SuspendDebugging(pidSnapshot[i].dwPID);
 	return true;
 }
 
 bool clsDebugger::SuspendDebugging(DWORD dwPID)
 {
+	const DWORD suspendType = CurrentSuspendType(this);
+
 	if(CheckProcessState(dwPID))
 	{
-		if(dbgSettings.dwSuspendType == 0x0)
+		if(suspendType == 0x0)
 		{
 			HANDLE hProcess = NULL;
-			for(int i = 0;i < PIDs.size(); i++)
-			{
-				if(PIDs[i].bRunning && PIDs[i].dwPID == dwPID)
-					hProcess = PIDs[i].hProc;
-			}
+			bool isRunning = false;
+			if(!TryGetTrackedProcess(this, dwPID, &hProcess, &isRunning) || !isRunning)
+				return false;
 
 			if(DebugBreakProcess(hProcess))
 			{
@@ -98,8 +132,9 @@ bool clsDebugger::SuspendDebugging(DWORD dwPID)
 
 bool clsDebugger::StopDebuggingAll()
 {
-	for(int i = 0;i < PIDs.size();i++)
-		StopDebugging(PIDs[i].dwPID);
+	const QVector<PIDStruct> pidSnapshot = SnapshotPIDs(this);
+	for(int i = 0; i < pidSnapshot.size(); i++)
+		StopDebugging(pidSnapshot[i].dwPID);
 	return SignalDebugEvent();
 }
 
@@ -120,9 +155,10 @@ bool clsDebugger::StopDebugging(DWORD dwPID)
 bool clsDebugger::ResumeDebugging()
 {
 	bool resumedAnyThread = false;
-	for(int i = 0;i < PIDs.size(); i++)
+	const QVector<PIDStruct> pidSnapshot = SnapshotPIDs(this);
+	for(int i = 0; i < pidSnapshot.size(); i++)
 	{
-		if(SuspendProcess(PIDs[i].dwPID,false))
+		if(SuspendProcess(pidSnapshot[i].dwPID,false))
 			resumedAnyThread = true;
 	}
 
@@ -265,23 +301,31 @@ QString clsDebugger::GetTarget()
 
 bool clsDebugger::SetTraceFlagForPID(DWORD dwPID,bool bIsEnabled)
 {
-	for(int i = 0; i < PIDs.size(); i++)
+	bool foundPID = false;
 	{
-		if(PIDs[i].dwPID == dwPID)
+		QWriteLocker locker(&m_stateLock);
+		for(int i = 0; i < PIDs.size(); i++)
 		{
-			PIDs[i].bTraceFlag = bIsEnabled;
-			if(bIsEnabled)
+			if(PIDs[i].dwPID == dwPID)
 			{
-				qtDLGTrace::enableStatusBarTimer();
-				return StepIn();
-			}
-			else
-			{	
-				qtDLGTrace::disableStatusBarTimer();
-				return true;
+				PIDs[i].bTraceFlag = bIsEnabled;
+				foundPID = true;
+				break;
 			}
 		}
 	}
+
+	if(foundPID)
+	{
+		if(bIsEnabled)
+		{
+			qtDLGTrace::enableStatusBarTimer();
+			return StepIn();
+		}
+		qtDLGTrace::disableStatusBarTimer();
+		return true;
+	}
+
 	return false;
 }
 

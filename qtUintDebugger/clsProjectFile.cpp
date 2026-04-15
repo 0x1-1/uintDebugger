@@ -26,6 +26,52 @@ namespace
 	{
 		return {};
 	}
+
+	bool IsRootElementName(const QStringView &name)
+	{
+		return name == QStringLiteral("uintDebugger-DATA")
+			|| name == QStringLiteral("uintDebugger_DATA");
+	}
+
+	bool ReadDebugDataElement(QXmlStreamReader &xmlReader, QString *filePath, QString *commandLine)
+	{
+		QString localFilePath;
+		QString localCommandLine;
+
+		xmlReader.readNext();
+
+		while(!(xmlReader.tokenType() == QXmlStreamReader::EndElement && xmlReader.name() == QStringLiteral("TARGET")))
+		{
+			if(xmlReader.atEnd() || xmlReader.hasError())
+				return false;
+
+			if(xmlReader.tokenType() == QXmlStreamReader::StartElement)
+			{
+				if(xmlReader.name() == QStringLiteral("FilePath"))
+				{
+					xmlReader.readNext();
+					localFilePath = xmlReader.text().toString();
+				}
+				else if(xmlReader.name() == QStringLiteral("CommandLine"))
+				{
+					xmlReader.readNext();
+					localCommandLine = xmlReader.text().toString();
+				}
+			}
+
+			xmlReader.readNext();
+		}
+
+		if(localFilePath.isEmpty())
+			return false;
+
+		if(filePath != NULL)
+			*filePath = localFilePath;
+		if(commandLine != NULL)
+			*commandLine = localCommandLine;
+
+		return true;
+	}
 }
 
 clsProjectFile::clsProjectFile(bool isSaveFile, bool *pStartDebugging, QString projectFile, bool bSilent) :
@@ -232,6 +278,9 @@ void clsProjectFile::WriteBreakpointListToFile(QList<BPStruct> &tempBP, int bpTy
 
 bool clsProjectFile::ReadDataFromFile(const QString &loadFilePath)
 {
+	if(!ValidateDataFromFile(loadFilePath))
+		return false;
+
 	QFile loadFile(loadFilePath);
 	if(!loadFile.open(QIODevice::ReadOnly | QIODevice::Text))
 		return false;
@@ -248,22 +297,8 @@ bool clsProjectFile::ReadDataFromFile(const QString &loadFilePath)
 		}
 		else if(token == QXmlStreamReader::StartElement)
 		{
-			if(xmlReader.name() == "uintDebugger-DATA" || xmlReader.name() == "uintDebugger_DATA")
+			if(IsRootElementName(xmlReader.name()))
 			{
-				// Accept: no attribute (v0 / legacy file) or schemaVersion == "1".
-				// Reject anything higher so we don't silently mis-parse a future
-				// format this build doesn't understand.
-				const auto verAttr = xmlReader.attributes().value("schemaVersion");
-				if(!verAttr.isEmpty())
-				{
-					bool ok = false;
-					const int ver = verAttr.toInt(&ok);
-					if(!ok || ver > kNdbSchemaVersion)
-					{
-						loadFile.close();
-						return false; // unsupported future schema
-					}
-				}
 				continue;
 			}
 			else if(xmlReader.name() == "TARGET")
@@ -293,44 +328,79 @@ bool clsProjectFile::ReadDataFromFile(const QString &loadFilePath)
 		}
 	}
 
+	if(xmlReader.hasError())
+	{
+		loadFile.close();
+		return false;
+	}
+
 	loadFile.close();
 	return true;
+}
+
+bool clsProjectFile::ValidateDataFromFile(const QString &loadFilePath, QString *filePath, QString *commandLine)
+{
+	QFile loadFile(loadFilePath);
+	if(!loadFile.open(QIODevice::ReadOnly | QIODevice::Text))
+		return false;
+
+	bool foundRoot = false;
+	bool foundTarget = false;
+	QString parsedFilePath;
+	QString parsedCommandLine;
+
+	QXmlStreamReader xmlReader(&loadFile);
+	while(!xmlReader.atEnd() && !xmlReader.hasError())
+	{
+		const QXmlStreamReader::TokenType token = xmlReader.readNext();
+		if(token != QXmlStreamReader::StartElement)
+			continue;
+
+		if(IsRootElementName(xmlReader.name()))
+		{
+			int schemaVersion = 0;
+			if(!NdbSchema::ReadSchemaVersion(xmlReader.attributes(), &schemaVersion))
+			{
+				loadFile.close();
+				return false;
+			}
+			foundRoot = true;
+			continue;
+		}
+
+		if(xmlReader.name() == QStringLiteral("TARGET"))
+		{
+			if(!ReadDebugDataElement(xmlReader, &parsedFilePath, &parsedCommandLine))
+			{
+				loadFile.close();
+				return false;
+			}
+			foundTarget = true;
+		}
+	}
+
+	const bool valid = foundRoot && foundTarget && !parsedFilePath.isEmpty() && !xmlReader.hasError();
+	if(valid)
+	{
+		if(filePath != NULL)
+			*filePath = parsedFilePath;
+		if(commandLine != NULL)
+			*commandLine = parsedCommandLine;
+	}
+
+	loadFile.close();
+	return valid;
 }
 
 bool clsProjectFile::ReadDebugDataFromFile(QXmlStreamReader &xmlReader)
 {
 	QString filePath, commandLine;
 
-	xmlReader.readNext();
-
-	while(!(xmlReader.tokenType() == QXmlStreamReader::EndElement && xmlReader.name() == "TARGET"))
-	{
-		if(xmlReader.tokenType() == QXmlStreamReader::StartElement)
-		{
-			if(xmlReader.name() == "FilePath")
-			{
-				xmlReader.readNext();
-				filePath = xmlReader.text().toString();
-			}
-			else if(xmlReader.name() == "CommandLine")
-			{
-				xmlReader.readNext();
-				commandLine = xmlReader.text().toString();
-			}
-		}
-
-		xmlReader.readNext();
-	}
-
-	if(filePath.length() <= 0)
-	{
+	if(!ReadDebugDataElement(xmlReader, &filePath, &commandLine))
 		return false;
-	}
-	else
-	{
-		m_pMainWindow->coreDebugger->SetTarget(filePath);
-		m_pMainWindow->coreDebugger->SetCommandLine(commandLine);
-	}
+
+	m_pMainWindow->coreDebugger->SetTarget(filePath);
+	m_pMainWindow->coreDebugger->SetCommandLine(commandLine);
 
 	return true;
 }

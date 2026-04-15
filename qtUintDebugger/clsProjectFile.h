@@ -18,10 +18,7 @@
 #define CLSPROJECTFILE_H
 
 #include "qtDLGUintDebugger.h"
-
-// Current schema version written to every new .ndb file.
-// Increment when a breaking format change is made.
-static constexpr int kNdbSchemaVersion = 1;
+#include "NdbSchema.h"
 
 class clsProjectFile
 {
@@ -35,6 +32,7 @@ private:
 
 	bool WriteDataToFile(const QString &saveFilePath);
 	bool ReadDataFromFile(const QString &loadFilePath);
+	bool ValidateDataFromFile(const QString &loadFilePath, QString *filePath = NULL, QString *commandLine = NULL);
 	bool ReadDebugDataFromFile(QXmlStreamReader &xmlReader);
 
 	void WritePatchDataToFile(QXmlStreamWriter &xmlWriter);

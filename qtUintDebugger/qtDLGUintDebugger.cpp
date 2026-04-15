@@ -34,10 +34,10 @@
 #include <shellapi.h>
 #include <QStandardPaths>
 #include <QDir>
-#include <QDirIterator>
 #include <QFile>
 #include <QCryptographicHash>
 #include <QFileInfo>
+#include <QSettings>
 #include <QTimer>
 #include <QMessageBox>
 #include <QStatusBar>
@@ -50,6 +50,8 @@ qtDLGUintDebugger* qtDLGUintDebugger::qtDLGMyWindow = NULL;
 
 namespace
 {
+constexpr auto kLastAutosavePathKey = "lastAutosavePath";
+
 QString MainWindowTitle()
 {
 	return QStringLiteral("[" UINTDEBUGGER_DISPLAY_NAME " v " UINTDEBUGGER_VERSION_STRING "]");
@@ -596,14 +598,14 @@ QString qtDLGUintDebugger::AutosaveDir()
 
 QString qtDLGUintDebugger::AutosavePath()
 {
-	// Use a target-specific filename so sessions for different targets do not
-	// overwrite each other's autosave.  Fall back to the legacy name when no
-	// target is set (e.g. pure project-file load without a running session).
+	// Use a target + command-line specific filename so different launch
+	// configurations of the same executable do not overwrite one another.
 	const QString target = coreDebugger->GetTarget();
 	if(!target.isEmpty())
 	{
+		const QString autosaveIdentity = target + QStringLiteral("\n") + coreDebugger->GetCMDLine();
 		const QByteArray hash = QCryptographicHash::hash(
-			target.toUtf8(), QCryptographicHash::Md5);
+			autosaveIdentity.toUtf8(), QCryptographicHash::Md5);
 		return AutosaveDir() + "/autosave_" + QString::fromLatin1(hash.toHex()) + ".ndb";
 	}
 	return AutosaveDir() + "/autosave.ndb";
@@ -612,39 +614,40 @@ QString qtDLGUintDebugger::AutosavePath()
 void qtDLGUintDebugger::AutosaveSave()
 {
 	// bSilent=true: autosave must never pop a dialog.
-	clsProjectFile(true, nullptr, AutosavePath(), /*bSilent=*/true);
+	const QString autosavePath = AutosavePath();
+	clsProjectFile(true, nullptr, autosavePath, /*bSilent=*/true);
+
+	QSettings settings(QSettings::NativeFormat, QSettings::UserScope,
+		QStringLiteral("uintDebugger"), QStringLiteral("uintDebugger"));
+	if(QFile::exists(autosavePath))
+		settings.setValue(QStringLiteral(kLastAutosavePathKey), autosavePath);
+	else
+		settings.remove(QStringLiteral(kLastAutosavePathKey));
+	settings.sync();
 }
 
 void qtDLGUintDebugger::AutosaveRestore()
 {
-	// 1. Look for per-target autosaves (autosave_*.ndb) and pick the newest.
-	// 2. Fall back to the legacy autosave.ndb if nothing else is found.
-	const QString dir = AutosaveDir();
-	QString bestPath;
-	QDateTime bestTime;
+	QSettings settings(QSettings::NativeFormat, QSettings::UserScope,
+		QStringLiteral("uintDebugger"), QStringLiteral("uintDebugger"));
+	QString autosavePath = settings.value(QStringLiteral(kLastAutosavePathKey)).toString();
 
-	QDirIterator it(dir, QStringList() << "autosave_*.ndb", QDir::Files);
-	while(it.hasNext())
+	if(autosavePath.isEmpty())
 	{
-		const QString candidate = it.next();
-		const QDateTime modified = QFileInfo(candidate).lastModified();
-		if(bestPath.isEmpty() || modified > bestTime)
-		{
-			bestPath = candidate;
-			bestTime = modified;
-		}
+		const QString legacyPath = AutosaveDir() + "/autosave.ndb";
+		if(QFile::exists(legacyPath))
+			autosavePath = legacyPath;
 	}
 
-	if(bestPath.isEmpty())
-	{
-		// Legacy fallback
-		const QString legacy = dir + "/autosave.ndb";
-		if(QFile::exists(legacy))
-			bestPath = legacy;
-	}
-
-	if(bestPath.isEmpty())
+	if(autosavePath.isEmpty())
 		return;
+
+	if(!QFile::exists(autosavePath))
+	{
+		settings.remove(QStringLiteral(kLastAutosavePathKey));
+		settings.sync();
+		return;
+	}
 
 	const auto btn = QMessageBox::question(this,
 		QStringLiteral("uintDebugger"),
@@ -656,9 +659,13 @@ void qtDLGUintDebugger::AutosaveRestore()
 		return;
 
 	bool startDebugging = false;
-	clsProjectFile(false, &startDebugging, bestPath, /*bSilent=*/true);
+	clsProjectFile(false, &startDebugging, autosavePath, /*bSilent=*/true);
 	if(startDebugging)
+	{
+		settings.remove(QStringLiteral(kLastAutosavePathKey));
+		settings.sync();
 		action_DebugStart();
+	}
 }
 
 void qtDLGUintDebugger::closeEvent(QCloseEvent* closeEvent)

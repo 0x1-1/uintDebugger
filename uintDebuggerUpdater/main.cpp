@@ -3,6 +3,7 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <system_error>
 #include <string>
 #include <vector>
 
@@ -69,12 +70,84 @@ bool ContainsUpdaterFile(const std::vector<std::wstring> &relativeFiles)
     return false;
 }
 
+bool IsReservedUpdaterPath(const fs::path &relativePath)
+{
+    if(relativePath.empty())
+        return false;
+
+    const fs::path normalizedPath = relativePath.lexically_normal();
+    const auto component = normalizedPath.begin();
+    if(component != normalizedPath.end() && *component == L"update_backup")
+        return true;
+
+    return normalizedPath.filename() == L"update_tmp.exe";
+}
+
 void CopyUpdateFile(const fs::path &sourcePath, const fs::path &destinationPath)
 {
     if(destinationPath.has_parent_path())
         fs::create_directories(destinationPath.parent_path());
 
     fs::copy_file(sourcePath, destinationPath, fs::copy_options::overwrite_existing);
+}
+
+fs::path BackupDirectory(const fs::path &appDirectory)
+{
+    return appDirectory / L"update_backup";
+}
+
+std::wstring WidenMessage(const char *message)
+{
+    if(message == NULL)
+        return L"unknown error";
+    return std::wstring(message, message + strlen(message));
+}
+
+void BackupDestinationFile(const fs::path &destinationPath, const fs::path &backupPath)
+{
+    if(!destinationPath.has_parent_path())
+        return;
+
+    if(backupPath.has_parent_path())
+        fs::create_directories(backupPath.parent_path());
+
+    fs::copy_file(destinationPath, backupPath, fs::copy_options::overwrite_existing);
+}
+
+bool RollbackAppliedFiles(const fs::path &appDirectory, const std::vector<fs::path> &appliedFiles)
+{
+    const fs::path backupDirectory = BackupDirectory(appDirectory);
+    std::error_code ec;
+
+    for(std::vector<fs::path>::const_reverse_iterator it = appliedFiles.rbegin(); it != appliedFiles.rend(); ++it)
+    {
+        const fs::path destinationPath = appDirectory / *it;
+        const fs::path backupPath = backupDirectory / *it;
+
+        if(fs::exists(backupPath, ec))
+        {
+            try
+            {
+                CopyUpdateFile(backupPath, destinationPath);
+            }
+            catch(const std::exception &)
+            {
+                return false;
+            }
+        }
+        else
+        {
+            ec.clear();
+            fs::remove(destinationPath, ec);
+        }
+
+        if(ec)
+            return false;
+    }
+
+    ec.clear();
+    fs::remove_all(backupDirectory, ec);
+    return !ec;
 }
 
 int AbortUpdate(const fs::path &appDirectory, const std::wstring &message)
@@ -136,7 +209,7 @@ int wmain(int argc, wchar_t **argv)
                 return AbortUpdate(
                     appDirectory,
                     std::wstring(L"Failed to stage updater.exe: ") +
-                        std::wstring(ex.what(), ex.what() + strlen(ex.what())));
+                        WidenMessage(ex.what()));
             }
 
             std::vector<std::wstring> forwardedArguments;
@@ -159,14 +232,28 @@ int wmain(int argc, wchar_t **argv)
                 appDirectory,
                 std::wstring(L"Unsafe update path blocked: ") + relativePath.wstring());
         }
+
+        if(IsReservedUpdaterPath(relativePath))
+        {
+            return AbortUpdate(
+                appDirectory,
+                std::wstring(L"Reserved updater path blocked: ") + relativePath.wstring());
+        }
     }
 
     // Second pass: apply validated files.
+    const fs::path backupDirectory = BackupDirectory(appDirectory);
+    std::error_code backupCleanupError;
+    fs::remove_all(backupDirectory, backupCleanupError);
+    backupCleanupError.clear();
+
+    std::vector<fs::path> appliedFiles;
     for(std::vector<std::wstring>::const_iterator it = relativeFiles.begin(); it != relativeFiles.end(); ++it)
     {
         const fs::path relativePath = fs::path(*it).lexically_normal();
         const fs::path sourcePath = updatesDirectory / relativePath;
         const fs::path destinationPath = appDirectory / relativePath;
+        const fs::path backupPath = backupDirectory / relativePath;
 
         if(!fs::exists(sourcePath))
             continue;
@@ -181,22 +268,40 @@ int wmain(int argc, wchar_t **argv)
                 std::wstring(L"Refused to apply non-regular update file: ") + relativePath.wstring());
         }
 
+        if(fs::exists(destinationPath) && !UpdaterSafety::IsSourceRegularFile(destinationPath))
+        {
+            const bool rollbackOk = RollbackAppliedFiles(appDirectory, appliedFiles);
+            return AbortUpdate(
+                appDirectory,
+                std::wstring(L"Refused to overwrite non-regular existing file: ") +
+                    relativePath.wstring() +
+                    (rollbackOk ? L"" : L"\n\nRollback also failed; some files may need manual repair."));
+        }
+
         try
         {
+            if(fs::exists(destinationPath))
+                BackupDestinationFile(destinationPath, backupPath);
+
             CopyUpdateFile(sourcePath, destinationPath);
+            appliedFiles.push_back(relativePath);
         }
         catch(const std::exception &ex)
         {
+            const bool rollbackOk = RollbackAppliedFiles(appDirectory, appliedFiles);
             return AbortUpdate(
                 appDirectory,
                 std::wstring(L"Failed to apply update file: ") +
                     relativePath.wstring() +
                     L"\n\nReason: " +
-                    std::wstring(ex.what(), ex.what() + strlen(ex.what())));
+                    WidenMessage(ex.what()) +
+                    (rollbackOk ? L"" : L"\n\nRollback also failed; some files may need manual repair."));
         }
     }
 
     std::error_code removeError;
+    fs::remove_all(backupDirectory, removeError);
+    removeError.clear();
     fs::remove_all(updatesDirectory, removeError);
 
     if(!LaunchDetached(appDirectory / L"uintDebugger.exe", std::vector<std::wstring>()))

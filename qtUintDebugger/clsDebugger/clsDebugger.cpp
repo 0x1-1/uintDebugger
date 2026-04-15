@@ -454,7 +454,8 @@ void clsDebugger::DebuggingLoop()
 						pCurrentPID->bWOW64KernelBP = true;
 						bIsKernelBP = true;
 					}
-					[[fallthrough]]; // WOW64 BP also needs the standard BP handling below
+					// Fall through: WOW64 breakpoints still need the normal
+					// breakpoint handling below.
 				case EXCEPTION_BREAKPOINT:
 					{
 						bool bStepOver = false;
@@ -907,22 +908,28 @@ void clsDebugger::DebuggingLoop()
 
 					PBExceptionInfo((quint64)exInfo->ExceptionAddress, exInfo->ExceptionCode, debug_event.dwProcessId, debug_event.dwThreadId);
 
-					for (int i = 0; i < ExceptionHandler.size(); i++)
+					QVector<customException> exceptionHandlers;
 					{
-						if(exInfo->ExceptionCode == ExceptionHandler[i].dwExceptionType)
+						QReadLocker locker(&m_stateLock);
+						exceptionHandlers = ExceptionHandler;
+					}
+
+					for (int i = 0; i < exceptionHandlers.size(); i++)
+					{
+						if(exInfo->ExceptionCode == exceptionHandlers[i].dwExceptionType)
 						{
 							bExceptionHandler = true;
 
-							if(ExceptionHandler[i].dwHandler != NULL)
+							if(exceptionHandlers[i].dwHandler != NULL)
 							{
-								CustomHandler pCustomHandler = (CustomHandler)ExceptionHandler[i].dwHandler;
+								CustomHandler pCustomHandler = (CustomHandler)exceptionHandlers[i].dwHandler;
 								dwContinueStatus = pCustomHandler(&debug_event);
 
-								if(ExceptionHandler[i].dwAction == 0)
+								if(exceptionHandlers[i].dwAction == 0)
 									dwContinueStatus = CallBreakDebugger(&debug_event, 0);
 							}
 							else
-								dwContinueStatus = CallBreakDebugger(&debug_event,ExceptionHandler[i].dwAction);
+								dwContinueStatus = CallBreakDebugger(&debug_event,exceptionHandlers[i].dwAction);
 
 							break; // remove this to allow multiple exception handlers for the same event
 						}
@@ -1278,6 +1285,7 @@ bool clsDebugger::SetThreadContextHelper(bool bDecIP, bool bSetTrapFlag, DWORD d
 
 HANDLE clsDebugger::GetCurrentProcessHandle(DWORD dwPID)
 {
+	QReadLocker locker(&m_stateLock);
 	for(int i = 0; i < PIDs.size(); i++)
 	{
 		if(PIDs[i].dwPID == dwPID)
