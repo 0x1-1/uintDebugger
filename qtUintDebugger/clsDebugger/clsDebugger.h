@@ -254,6 +254,7 @@ private:
 	void AttachedDebugging();
 	void NormalDebugging();
 	void CleanWorkSpace();
+	bool SignalDebugEvent();
 	
 	bool PBThreadInfo(DWORD dwPID, DWORD dwTID, quint64 dwEP, bool bSuspended, DWORD dwExitCode, bool isNewThread);
 	bool PBProcInfo(DWORD dwPID, PTCHAR sFileName, quint64 dwEP, DWORD dwExitCode, HANDLE hProc, DWORD64 imageBase, bool isNewProc);

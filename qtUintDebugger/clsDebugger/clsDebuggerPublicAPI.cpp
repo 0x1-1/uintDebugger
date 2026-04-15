@@ -25,6 +25,11 @@
 
 using namespace std;
 
+bool clsDebugger::SignalDebugEvent()
+{
+	return SetEvent(m_debugEvent) != 0;
+}
+
 bool clsDebugger::DetachFromProcess()
 {
 	m_normalDebugging = true;
@@ -95,7 +100,7 @@ bool clsDebugger::StopDebuggingAll()
 {
 	for(int i = 0;i < PIDs.size();i++)
 		StopDebugging(PIDs[i].dwPID);
-	return SetEvent(m_debugEvent);
+	return SignalDebugEvent();
 }
 
 bool clsDebugger::StopDebugging(DWORD dwPID)
@@ -114,9 +119,17 @@ bool clsDebugger::StopDebugging(DWORD dwPID)
 
 bool clsDebugger::ResumeDebugging()
 {
+	bool resumedAnyThread = false;
 	for(int i = 0;i < PIDs.size(); i++)
-		SuspendProcess(PIDs[i].dwPID,false);
-	return SetEvent(m_debugEvent);
+	{
+		if(SuspendProcess(PIDs[i].dwPID,false))
+			resumedAnyThread = true;
+	}
+
+	if(IsBreaking())
+		return SignalDebugEvent();
+
+	return resumedAnyThread || GetDebuggingState();
 }
 
 bool clsDebugger::GetDebuggingState()
@@ -136,15 +149,20 @@ bool clsDebugger::IsTargetSet()
 
 bool clsDebugger::StepOver(quint64 dwNewOffset)
 {
+	if(!IsBreaking())
+		return false;
+
 	if(!m_pBreakpointManager->BreakpointAdd(SOFTWARE_BP, NULL, m_currentPID, dwNewOffset, 1, BP_STEPOVER, NULL))
 		return false;
 
-	SetEvent(m_debugEvent);
-	return true;
+	return SignalDebugEvent();
 }
 
 bool clsDebugger::StepIn()
 {
+	if(!IsBreaking())
+		return false;
+
 	m_singleStepFlag = true;
 
 #ifdef _AMD64_
@@ -160,7 +178,7 @@ bool clsDebugger::StepIn()
 	ProcessContext.EFlags |= 0x100;
 #endif
 
-	return SetEvent(m_debugEvent);
+	return SignalDebugEvent();
 }
 
 void clsDebugger::ClearTarget()

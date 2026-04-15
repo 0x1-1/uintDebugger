@@ -25,8 +25,8 @@
 #include "qtDLGUintDebugger.h"
 #include "qtDLGWatch.h"
 
+#include <QMetaObject>
 #include <Windows.h>
-#include "BeaEngine.h"
 
 // ---------------------------------------------------------------------------
 // Resolve an address token: "0x1234", "1234" (hex), or "module::export".
@@ -68,7 +68,7 @@ quint64 clsCommandParser::ResolveAddress(const QString &token, bool &ok)
 }
 
 // ---------------------------------------------------------------------------
-// Execute one command line.  Returns a log string.
+// Execute one command line. Returns a log string.
 // ---------------------------------------------------------------------------
 QString clsCommandParser::Execute(const QString &rawCmd)
 {
@@ -79,13 +79,13 @@ QString clsCommandParser::Execute(const QString &rawCmd)
     qtDLGUintDebugger *pMain = qtDLGUintDebugger::GetInstance();
     if(!pMain) return QStringLiteral("[cmd] ERROR: main window not available");
 
-    clsDebugger  *dbg  = pMain->coreDebugger;
+    clsDebugger  *dbg   = pMain->coreDebugger;
     const bool    isDbg = dbg->GetDebuggingState();
 
-    // Split on first whitespace — verb + optional argument
-    const int     sp    = cmd.indexOf(' ');
-    const QString verb  = (sp < 0 ? cmd : cmd.left(sp)).toLower();
-    const QString arg   = (sp < 0 ? QString() : cmd.mid(sp + 1).trimmed());
+    // Split on first whitespace: verb + optional argument
+    const int     sp   = cmd.indexOf(' ');
+    const QString verb = (sp < 0 ? cmd : cmd.left(sp)).toLower();
+    const QString arg  = (sp < 0 ? QString() : cmd.mid(sp + 1).trimmed());
 
     // -----------------------------------------------------------------------
     // Commands that don't need an active debugger session
@@ -108,7 +108,8 @@ QString clsCommandParser::Execute(const QString &rawCmd)
     // --- g : resume --------------------------------------------------------
     if(verb == "g")
     {
-        dbg->ResumeDebugging();
+        if(!dbg->ResumeDebugging())
+            return QStringLiteral("[cmd] g: resume failed.");
         pMain->UpdateStateBar(STATE_RUN);
         return QStringLiteral("[cmd] Resumed.");
     }
@@ -116,7 +117,8 @@ QString clsCommandParser::Execute(const QString &rawCmd)
     // --- t : step in -------------------------------------------------------
     if(verb == "t")
     {
-        dbg->StepIn();
+        if(!dbg->StepIn())
+            return QStringLiteral("[cmd] t: only valid while the debugger is at a break point.");
         return QStringLiteral("[cmd] Step in.");
     }
 
@@ -126,48 +128,15 @@ QString clsCommandParser::Execute(const QString &rawCmd)
         if(!dbg->IsBreaking())
             return QStringLiteral("[cmd] p: only valid while the debugger is at a break point.");
 
-        quint64 eip = 0;
-        bool    isWow = false;
-#ifdef _AMD64_
-        BOOL bWow = FALSE;
-        if(clsAPIImport::pIsWow64Process)
-            clsAPIImport::pIsWow64Process(dbg->GetCurrentProcessHandle(), &bWow);
-        isWow = (bWow != 0);
-        eip = isWow ? (quint64)dbg->wowProcessContext.Eip
-                    : (quint64)dbg->ProcessContext.Rip;
-#else
-        eip = (quint64)dbg->ProcessContext.Eip;
-#endif
-        if(eip == 0)
-            return QStringLiteral("[cmd] p: cannot determine EIP/RIP.");
-
-        // Read up to 16 bytes of the current instruction from the target process.
-        HANDLE hProc = dbg->GetCurrentProcessHandle();
-        BYTE instrBuf[16] = {};
-        SIZE_T bytesRead = 0;
-        ReadProcessMemory(hProc, (LPCVOID)eip, instrBuf, sizeof(instrBuf), &bytesRead);
-        if(bytesRead == 0)
-            return QStringLiteral("[cmd] p: ReadProcessMemory failed at 0x%1.")
-                .arg(eip, 16, 16, QChar('0'));
-
-        // Decode with BeaEngine to find the instruction length.
-        DISASM da = {};
-        da.EIP          = (UIntPtr)instrBuf;
-        da.VirtualAddr  = (UInt64)eip;
-        da.Archi        = isWow ? 0 : 64;   // 0 = x86, 64 = x86-64
-        da.SecurityBlock = (UInt32)bytesRead;
-        const int instrLen = Disasm(&da);
-        if(instrLen <= 0 || instrLen == UNKNOWN_OPCODE)
-            return QStringLiteral("[cmd] p: cannot decode instruction at 0x%1.")
-                .arg(eip, 16, 16, QChar('0'));
-
-        // Place a BP_STEPOVER at the next instruction and resume.
-        const quint64 nextEip = eip + (quint64)instrLen;
-        if(!dbg->StepOver(nextEip))
+        if(!QMetaObject::invokeMethod(
+            pMain,
+            "action_DebugStepOver",
+            Qt::DirectConnection))
+        {
             return QStringLiteral("[cmd] p: StepOver failed.");
+        }
 
-        return QStringLiteral("[cmd] Step over → 0x%1.")
-            .arg(nextEip, 16, 16, QChar('0'));
+        return QStringLiteral("[cmd] Step over.");
     }
 
     // --- r : register dump -------------------------------------------------
@@ -235,7 +204,7 @@ QString clsCommandParser::Execute(const QString &rawCmd)
         return out;
     }
 
-    // --- bp / bph / bpm / bd : breakpoints ---------------------------------
+    // --- bp / bph / bpm / bd : breakpoints --------------------------------
     if(verb == "bp" || verb == "bph" || verb == "bpm" || verb == "bd")
     {
         if(arg.isEmpty())
@@ -403,20 +372,20 @@ QString clsCommandParser::Execute(const QString &rawCmd)
     {
         return QStringLiteral(
             "[cmd] Commands:\n"
-            "  bp  <addr>          — software BP (INT3)\n"
-            "  bph <addr>          — hardware BP (exec)\n"
-            "  bpm <addr>          — memory BP (access)\n"
-            "  bpc <addr> <cond>   — conditional software BP\n"
-            "  bd  <addr>          — delete BP at address\n"
-            "  bc                  — clear all BPs\n"
-            "  g                   — resume\n"
-            "  t                   — step in  (requires break)\n"
-            "  p                   — step over (requires break; uses BeaEngine disasm)\n"
-            "  r                   — dump registers (requires break)\n"
-            "  db  <addr>          — hex dump 128 bytes\n"
-            "  eval <expr>         — evaluate expression\n"
-            "  w   <expr>          — add to watch window\n"
-            "  x   <module>        — show module base address\n"
+            "  bp  <addr>          - software BP (INT3)\n"
+            "  bph <addr>          - hardware BP (exec)\n"
+            "  bpm <addr>          - memory BP (access)\n"
+            "  bpc <addr> <cond>   - conditional software BP\n"
+            "  bd  <addr>          - delete BP at address\n"
+            "  bc                  - clear all BPs\n"
+            "  g                   - resume\n"
+            "  t                   - step in (requires break)\n"
+            "  p                   - step over (requires break)\n"
+            "  r                   - dump registers (requires break)\n"
+            "  db  <addr>          - hex dump 128 bytes\n"
+            "  eval <expr>         - evaluate expression\n"
+            "  w   <expr>          - add to watch window\n"
+            "  x   <module>        - show module base address\n"
             "  <addr>: hex (0x optional) or module::export");
     }
 

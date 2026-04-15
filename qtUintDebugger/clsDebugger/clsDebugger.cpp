@@ -1002,6 +1002,10 @@ DWORD clsDebugger::CallBreakDebugger(DEBUG_EVENT *debug_event,DWORD dwHandle)
 					.arg(debug_event->dwThreadId, 6, 16, QChar('0')));
 			}
 
+			// Clear any stale signal left behind by a previous timed-out GUI
+			// interaction before announcing the new break to the UI.
+			ResetEvent(m_debugEvent);
+
 #ifdef _AMD64_
 			BOOL bIsWOW64 = false;
 

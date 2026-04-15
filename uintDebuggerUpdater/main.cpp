@@ -1,5 +1,7 @@
 #include <windows.h>
 
+#include <cstring>
+#include <exception>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -74,6 +76,18 @@ void CopyUpdateFile(const fs::path &sourcePath, const fs::path &destinationPath)
 
     fs::copy_file(sourcePath, destinationPath, fs::copy_options::overwrite_existing);
 }
+
+int AbortUpdate(const fs::path &appDirectory, const std::wstring &message)
+{
+    MessageBoxW(
+        NULL,
+        message.c_str(),
+        L"uintDebugger updater",
+        MB_OK | MB_ICONERROR);
+
+    LaunchDetached(appDirectory / L"uintDebugger.exe", std::vector<std::wstring>());
+    return 1;
+}
 }
 
 int wmain(int argc, wchar_t **argv)
@@ -104,9 +118,26 @@ int wmain(int argc, wchar_t **argv)
     if(!skipSelfUpdate && ContainsUpdaterFile(relativeFiles))
     {
         const fs::path downloadedUpdater = updatesDirectory / L"updater.exe";
-        if(fs::exists(downloadedUpdater) && UpdaterSafety::IsSourceRegularFile(downloadedUpdater))
+        if(fs::exists(downloadedUpdater))
         {
-            CopyUpdateFile(downloadedUpdater, temporaryUpdater);
+            if(!UpdaterSafety::IsSourceRegularFile(downloadedUpdater))
+            {
+                return AbortUpdate(
+                    appDirectory,
+                    L"The downloaded updater is not a regular file. The update was cancelled.");
+            }
+
+            try
+            {
+                CopyUpdateFile(downloadedUpdater, temporaryUpdater);
+            }
+            catch(const std::exception &ex)
+            {
+                return AbortUpdate(
+                    appDirectory,
+                    std::wstring(L"Failed to stage updater.exe: ") +
+                        std::wstring(ex.what(), ex.what() + strlen(ex.what())));
+            }
 
             std::vector<std::wstring> forwardedArguments;
             forwardedArguments.push_back(L"--skip-self-update");
@@ -123,7 +154,11 @@ int wmain(int argc, wchar_t **argv)
     {
         const fs::path relativePath = fs::path(*it).lexically_normal();
         if(!UpdaterSafety::IsPathSafe(relativePath, appDirectory))
-            return 1; // hostile/malformed manifest — abort everything
+        {
+            return AbortUpdate(
+                appDirectory,
+                std::wstring(L"Unsafe update path blocked: ") + relativePath.wstring());
+        }
     }
 
     // Second pass: apply validated files.
@@ -140,14 +175,39 @@ int wmain(int argc, wchar_t **argv)
         // could point anywhere on the filesystem, bypassing the destination
         // path check performed above.
         if(!UpdaterSafety::IsSourceRegularFile(sourcePath))
-            return 1;
+        {
+            return AbortUpdate(
+                appDirectory,
+                std::wstring(L"Refused to apply non-regular update file: ") + relativePath.wstring());
+        }
 
-        CopyUpdateFile(sourcePath, destinationPath);
+        try
+        {
+            CopyUpdateFile(sourcePath, destinationPath);
+        }
+        catch(const std::exception &ex)
+        {
+            return AbortUpdate(
+                appDirectory,
+                std::wstring(L"Failed to apply update file: ") +
+                    relativePath.wstring() +
+                    L"\n\nReason: " +
+                    std::wstring(ex.what(), ex.what() + strlen(ex.what())));
+        }
     }
 
     std::error_code removeError;
     fs::remove_all(updatesDirectory, removeError);
 
-    LaunchDetached(appDirectory / L"uintDebugger.exe", std::vector<std::wstring>());
+    if(!LaunchDetached(appDirectory / L"uintDebugger.exe", std::vector<std::wstring>()))
+    {
+        MessageBoxW(
+            NULL,
+            L"The update finished, but uintDebugger.exe could not be started automatically.",
+            L"uintDebugger updater",
+            MB_OK | MB_ICONWARNING);
+        return 1;
+    }
+
     return 0;
 }
