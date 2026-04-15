@@ -43,3 +43,4 @@ endfunction()
 
 add_subdirectory(qtUintDebugger)
 add_subdirectory(uintDebuggerUpdater)
+add_subdirectory(tests)

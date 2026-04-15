@@ -43,14 +43,14 @@ qtDLGBreakPointManager::qtDLGBreakPointManager(QWidget *parent, Qt::WindowFlags 
 	tblBPs->horizontalHeader()->resizeSection(6,70); // Break On
 	tblBPs->horizontalHeader()->setFixedHeight(21);
 
-	connect(pbClose,SIGNAL(clicked()),this,SLOT(OnClose()));
-	connect(pbAddUpdate,SIGNAL(clicked()),this,SLOT(OnAddUpdate()));
-	connect(tblBPs,SIGNAL(cellClicked(int,int)),this,SLOT(OnSelectedBPChanged(int,int)));
-	connect(tblBPs,SIGNAL(itemDoubleClicked(QTableWidgetItem *)),this,SLOT(OnSendToDisassembler(QTableWidgetItem *)));
-	connect(cbType,SIGNAL(currentTextChanged(QString)),this,SLOT(OnBPTypeSelectionChanged(QString)));
-	connect(cbOpcode,SIGNAL(currentTextChanged(QString)),this,SLOT(OnBPOpcodeSelectionChanged(QString)));
-	connect(new QShortcut(QKeySequence(QKeySequence::Delete),this),SIGNAL(activated()),this,SLOT(OnBPRemove()));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
+	connect(pbClose,&QPushButton::clicked,this,&qtDLGBreakPointManager::OnClose);
+	connect(pbAddUpdate,&QPushButton::clicked,this,&qtDLGBreakPointManager::OnAddUpdate);
+	connect(tblBPs,&QTableWidget::cellClicked,this,&qtDLGBreakPointManager::OnSelectedBPChanged);
+	connect(tblBPs,&QTableWidget::itemDoubleClicked,this,&qtDLGBreakPointManager::OnSendToDisassembler);
+	connect(cbType,&QComboBox::currentTextChanged,this,&qtDLGBreakPointManager::OnBPTypeSelectionChanged);
+	connect(cbOpcode,&QComboBox::currentTextChanged,this,&qtDLGBreakPointManager::OnBPOpcodeSelectionChanged);
+	connect(new QShortcut(QKeySequence(QKeySequence::Delete),this),&QShortcut::activated,this,&qtDLGBreakPointManager::OnBPRemove);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGBreakPointManager::close);
 
 	m_pAPICompleter = new QCompleter(m_completerList, this);
 }

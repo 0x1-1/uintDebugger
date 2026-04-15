@@ -30,14 +30,14 @@ qtDLGRegEdit::qtDLGRegEdit(QWidget *parent, Qt::WindowFlags flags,LPVOID pProces
 	if(m_is64Bit)
 	{
 		ui64.setupUi(this);
-		connect(ui64.pbExit,SIGNAL(clicked()),this,SLOT(OnExit()));
-		connect(ui64.pbSave,SIGNAL(clicked()),this,SLOT(OnSaveAndExit()));
+		connect(ui64.pbExit,&QPushButton::clicked,this,&qtDLGRegEdit::OnExit);
+		connect(ui64.pbSave,&QPushButton::clicked,this,&qtDLGRegEdit::OnSaveAndExit);
 	}
 	else
 	{
 		ui86.setupUi(this);
-		connect(ui86.pbExit,SIGNAL(clicked()),this,SLOT(OnExit()));
-		connect(ui86.pbSave,SIGNAL(clicked()),this,SLOT(OnSaveAndExit()));
+		connect(ui86.pbExit,&QPushButton::clicked,this,&qtDLGRegEdit::OnExit);
+		connect(ui86.pbSave,&QPushButton::clicked,this,&qtDLGRegEdit::OnSaveAndExit);
 	}
 	this->setAttribute(Qt::WA_DeleteOnClose,true);
 

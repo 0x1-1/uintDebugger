@@ -19,10 +19,15 @@
 
 #include "qtDLGUintDebugger.h"
 
+// Current schema version written to every new .ndb file.
+// Increment when a breaking format change is made.
+static constexpr int kNdbSchemaVersion = 1;
+
 class clsProjectFile
 {
 public:
-	clsProjectFile(bool isSaveFile, bool *pStartDebugging = NULL, QString projectFile = "");
+	// bSilent = true suppresses all QMessageBox popups (used for autosave).
+	clsProjectFile(bool isSaveFile, bool *pStartDebugging = NULL, QString projectFile = "", bool bSilent = false);
 	~clsProjectFile();
 
 private:

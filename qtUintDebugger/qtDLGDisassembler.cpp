@@ -38,13 +38,13 @@ qtDLGDisassembler::qtDLGDisassembler(QWidget *parent)
 	coreDebugger			= qtDLGUintDebugger::GetInstance()->coreDebugger;
 	PEManager				= qtDLGUintDebugger::GetInstance()->PEManager;
 
-	connect(new QShortcut(QKeySequence("F2"), this), SIGNAL(activated()), this, SLOT(OnF2BreakPointPlace()));
-	connect(new QShortcut(QKeySequence("F4"), this), SIGNAL(activated()), this, SLOT(OnF4ExecuteTo()));
-	connect(new QShortcut(QKeySequence::InsertParagraphSeparator, this), SIGNAL(activated()), this, SLOT(OnDisAsReturnPressed()));
-	connect(new QShortcut(QKeySequence("Backspace"), this), SIGNAL(activated()),this, SLOT(OnDisAsReturn()));
-	connect(new QShortcut(QKeySequence("space"), this), SIGNAL(activated()), this, SLOT(OnEditInstruction()));
-	connect(tblDisAs, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(OnCustomDisassemblerContextMenu(QPoint)));
-	connect(scrollDisAs, SIGNAL(valueChanged(int)), this, SLOT(OnDisAsScroll(int)));
+	connect(new QShortcut(QKeySequence("F2"), this), &QShortcut::activated, this, &qtDLGDisassembler::OnF2BreakPointPlace);
+	connect(new QShortcut(QKeySequence("F4"), this), &QShortcut::activated, this, &qtDLGDisassembler::OnF4ExecuteTo);
+	connect(new QShortcut(QKeySequence::InsertParagraphSeparator, this), &QShortcut::activated, this, &qtDLGDisassembler::OnDisAsReturnPressed);
+	connect(new QShortcut(QKeySequence("Backspace"), this), &QShortcut::activated, this, &qtDLGDisassembler::OnDisAsReturn);
+	connect(new QShortcut(QKeySequence("space"), this), &QShortcut::activated, this, &qtDLGDisassembler::OnEditInstruction);
+	connect(tblDisAs, &QWidget::customContextMenuRequested, this, &qtDLGDisassembler::OnCustomDisassemblerContextMenu);
+	connect(scrollDisAs, &QScrollBar::valueChanged, this, &qtDLGDisassembler::OnDisAsScroll);
 	
 	// eventFilter for mouse scroll
 	tblDisAs->installEventFilter(this);
@@ -319,7 +319,7 @@ void qtDLGDisassembler::buildContextMenu()
 	m_contextMenu.addAction(new QAction("Execute to this", this));
 	m_contextMenu.addAction(new QAction("Trace to this", this));
 	
-	connect(&m_contextMenu, SIGNAL(triggered(QAction*)), this, SLOT(CustomDisassemblerMenuCallback(QAction*)));
+	connect(&m_contextMenu, &QMenu::triggered, this, &qtDLGDisassembler::CustomDisassemblerMenuCallback);
 }
 
 void qtDLGDisassembler::OnCustomDisassemblerContextMenu(QPoint qPoint)

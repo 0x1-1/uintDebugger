@@ -180,6 +180,11 @@ public:
 	bool IsTargetSet();
 	bool SetTraceFlagForPID(DWORD dwPID, bool bIsEnabled);
 
+	// True while the debugger thread is blocked at a break point waiting for the
+	// GUI event (m_debuggerBreak is set).  Safe to read from any thread because
+	// m_debuggerBreak is std::atomic<bool>.
+	bool IsBreaking() const { return m_debuggerBreak.load(); }
+
 	static DWORD GetCurrentPID();
 	static DWORD GetCurrentTID();
 		

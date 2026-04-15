@@ -42,9 +42,9 @@ qtDLGCallstack::qtDLGCallstack(QWidget *parent)
 	p_ctWorker = new clsCallstackWorker();
 	p_ctWorker->setAutoDelete(false);
 
-	connect(p_ctWorker, SIGNAL(OnCallstackFinished(QList<callstackDisplay>)), this, SLOT(OnCallstack(QList<callstackDisplay>)), Qt::QueuedConnection);
-	connect(tblCallstack,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnContextMenu(QPoint)));
-	connect(tblCallstack,SIGNAL(itemDoubleClicked(QTableWidgetItem *)),this,SLOT(OnDisplaySource(QTableWidgetItem *)));
+	connect(p_ctWorker, &clsCallstackWorker::OnCallstackFinished, this, &qtDLGCallstack::OnCallstack, Qt::QueuedConnection);
+	connect(tblCallstack,&QWidget::customContextMenuRequested,this,&qtDLGCallstack::OnContextMenu);
+	connect(tblCallstack,&QTableWidget::itemDoubleClicked,this,&qtDLGCallstack::OnDisplaySource);
 }
 
 qtDLGCallstack::~qtDLGCallstack()
@@ -72,7 +72,7 @@ void qtDLGCallstack::OnContextMenu(QPoint qPoint)
 	submenu->addAction(new QAction("Source File",this));
 
 	menu.addMenu(submenu);
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGCallstack::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }

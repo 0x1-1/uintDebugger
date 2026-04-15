@@ -410,9 +410,7 @@ void qtDLGPatchManager::SavePatch(quint64 Offset, bool saveAll)
 					patchFilePath = QFileDialog::getSaveFileName(this,
 						"Please select a place to save the patched executable",
 						tempPath.replace(".exe", "_patched.exe"),
-						"Executable files (*.exe)",
-						NULL,
-						QFileDialog::DontUseNativeDialog);
+						"Executable files (*.exe)");
 				}
 				else
 				{
@@ -420,9 +418,7 @@ void qtDLGPatchManager::SavePatch(quint64 Offset, bool saveAll)
 					patchFilePath = QFileDialog::getSaveFileName(this,
 						"Please select a place to save the patched dll",
 						tempPath.replace(".dll", "_patched.dll"),
-						"Dynamic link library (*.dll)",
-						NULL,
-						QFileDialog::DontUseNativeDialog);
+						"Dynamic link library (*.dll)");
 				}
 
 				fileMapping.insert(currentFilePath, patchFilePath);

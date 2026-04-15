@@ -30,8 +30,8 @@ qtDLGExceptionEdit::qtDLGExceptionEdit(QWidget *parent, Qt::WindowFlags flags, D
 	this->setFixedSize(this->width(),this->height());
 	this->setStyleSheet(clsHelperClass::LoadStyleSheet());
 
-	connect(pbSave,SIGNAL(clicked()),this,SLOT(OnSave()));
-	connect(pbCancel,SIGNAL(clicked()),this,SLOT(OnCancel()));
+	connect(pbSave,&QPushButton::clicked,this,&qtDLGExceptionEdit::OnSave);
+	connect(pbCancel,&QPushButton::clicked,this,&qtDLGExceptionEdit::OnCancel);
 
 	if(exceptionCode != NULL && handleException != -1)
 	{

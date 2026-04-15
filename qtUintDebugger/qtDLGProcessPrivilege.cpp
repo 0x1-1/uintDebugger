@@ -33,9 +33,9 @@ qtDLGProcessPrivilege::qtDLGProcessPrivilege(QWidget *parent, Qt::WindowFlags fl
 	this->setAttribute(Qt::WA_DeleteOnClose,true);
 	this->setLayout(verticalLayout);
 
-	connect(tblProcPriv,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomContextMenuRequested(QPoint)));
-	connect(new QShortcut(QKeySequence("F5"),this),SIGNAL(activated()),this,SLOT(DisplayPrivileges()));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
+	connect(tblProcPriv,&QWidget::customContextMenuRequested,this,&qtDLGProcessPrivilege::OnCustomContextMenuRequested);
+	connect(new QShortcut(QKeySequence("F5"),this),&QShortcut::activated,this,&qtDLGProcessPrivilege::DisplayPrivileges);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGProcessPrivilege::close);
 
 	// Init List
 	tblProcPriv->horizontalHeader()->resizeSection(0,75);
@@ -179,7 +179,7 @@ void qtDLGProcessPrivilege::OnCustomContextMenuRequested(QPoint qPoint)
 	submenu->addAction(new QAction("State",this));
 
 	menu.addMenu(submenu);
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGProcessPrivilege::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }

@@ -161,8 +161,9 @@ private:
 	void InsertRecentDebuggedFile(QString fileName);
 	void CleanGUI(bool bKeepLogBox = false);
 
-	static QString AutosavePath();
-	void AutosaveSave();
+	static QString AutosaveDir();
+	QString AutosavePath();   // per-target when a target is set, legacy fallback otherwise
+	void AutosaveSave();      // always silent — no dialogs
 
 protected:
 	void dragEnterEvent(QDragEnterEvent* pEvent);

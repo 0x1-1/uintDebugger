@@ -57,9 +57,9 @@ qtDLGHexView::qtDLGHexView(QWidget *parent, Qt::WindowFlags flags,unsigned long 
 	}
 
 	m_pHexDataWorker = new clsHexViewWorker(hProcess, StartOffset, Size);
-	connect(m_pHexDataWorker, SIGNAL(finished()), this, SLOT(DisplayData()), Qt::QueuedConnection);
-	connect(memoryScroll, SIGNAL(valueChanged(int)), this, SLOT(InsertDataFrom(int)));
-	connect(new QShortcut(Qt::Key_Escape, this), SIGNAL(activated()), this, SLOT(close()));
+	connect(m_pHexDataWorker, &QThread::finished, this, &qtDLGHexView::DisplayData, Qt::QueuedConnection);
+	connect(memoryScroll, &QScrollBar::valueChanged, this, &qtDLGHexView::InsertDataFrom);
+	connect(new QShortcut(Qt::Key_Escape, this), &QShortcut::activated, this, &qtDLGHexView::close);
 }
 
 qtDLGHexView::~qtDLGHexView()

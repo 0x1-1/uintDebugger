@@ -28,6 +28,7 @@
 #include <QCoreApplication>
 #include <Psapi.h>
 #include <TlHelp32.h>
+#include <string>
 
 #pragma comment(lib,"psapi.lib")
 
@@ -183,7 +184,14 @@ void clsDebugger::NormalDebugging()
 	if(dbgSettings.bDebugChilds == true)
 		dwCreationFlag = 0x1;
 
-	if(CreateProcess(m_targetFile.toStdWString().c_str(),(LPWSTR)m_commandLine.toStdWString().c_str(),NULL,NULL,false,dwCreationFlag,NULL,NULL,&_si,&_pi))
+	// Store wstrings in named locals so the data pointers remain valid for the
+	// duration of the CreateProcess call. The command-line buffer must be mutable
+	// (LPWSTR), so pass .data() — never cast a const c_str() pointer.
+	std::wstring targetFile  = m_targetFile.toStdWString();
+	std::wstring commandLine = m_commandLine.toStdWString();
+
+	if(CreateProcess(targetFile.c_str(), commandLine.empty() ? nullptr : commandLine.data(),
+		NULL, NULL, false, dwCreationFlag, NULL, NULL, &_si, &_pi))
 		DebuggingLoop();
 	else
 	{
@@ -251,14 +259,17 @@ void clsDebugger::DebuggingLoop()
 				m_pPEManager->OpenFile(processPath, debug_event.dwProcessId, (DWORD64)debug_event.u.CreateProcessInfo.lpBaseOfImage);
 								
 				PIDStruct *pCurrentPID = GetCurrentPIDDataPointer(debug_event.dwProcessId);
-				pCurrentPID->bSymLoad = SymInitialize(processHandle, symbolPath.toStdString().c_str(), false);
-				if(pCurrentPID->bSymLoad)
+				if(pCurrentPID != nullptr)
 				{
-					SymLoadModuleExW(processHandle,NULL,tcDllFilepath,0,(quint64)debug_event.u.CreateProcessInfo.lpBaseOfImage,0,0,0);
-				}
-				else
-				{
-					emit OnLog(QString("[!] Could not load symbols for Process(%1)").arg(debug_event.dwProcessId, 6, 16, QChar('0')));
+					pCurrentPID->bSymLoad = SymInitialize(processHandle, symbolPath.toStdString().c_str(), false);
+					if(pCurrentPID->bSymLoad)
+					{
+						SymLoadModuleExW(processHandle,NULL,tcDllFilepath,0,(quint64)debug_event.u.CreateProcessInfo.lpBaseOfImage,0,0,0);
+					}
+					else
+					{
+						emit OnLog(QString("[!] Could not load symbols for Process(%1)").arg(debug_event.dwProcessId, 6, 16, QChar('0')));
+					}
 				}
 
 				m_pBreakpointManager->BreakpointInit(debug_event.dwProcessId);
@@ -328,7 +339,12 @@ void clsDebugger::DebuggingLoop()
 		case LOAD_DLL_DEBUG_EVENT:
 			{
 				PIDStruct *pCurrentPID = GetCurrentPIDDataPointer(debug_event.dwProcessId);
-				PTCHAR sDLLFileName = clsHelperClass::GetFileNameFromModuleBase(pCurrentPID->hProc, debug_event.u.LoadDll.lpBaseOfDll); 
+				if(pCurrentPID == nullptr)
+				{
+					CloseHandleIfValid(debug_event.u.LoadDll.hFile);
+					break;
+				}
+				PTCHAR sDLLFileName = clsHelperClass::GetFileNameFromModuleBase(pCurrentPID->hProc, debug_event.u.LoadDll.lpBaseOfDll);
 				PBDLLInfo(sDLLFileName,debug_event.dwProcessId,(quint64)debug_event.u.LoadDll.lpBaseOfDll,true);
 
 				if(pCurrentPID->bSymLoad && dbgSettings.bAutoLoadSymbols)
@@ -410,6 +426,8 @@ void clsDebugger::DebuggingLoop()
 						bIsBP			= false,
 						bIsKernelBP		= false;
 				PIDStruct *pCurrentPID	= GetCurrentPIDDataPointer(debug_event.dwProcessId);
+				if(pCurrentPID == nullptr)
+					break; // PID table mismatch — continue the debug loop
 
 				switch (exInfo->ExceptionCode)
 				{
@@ -957,6 +975,14 @@ void clsDebugger::DebuggingLoop()
 	emit OnDebuggerTerminated();
 }
 
+namespace
+{
+// Maximum time (ms) we wait for the GUI to respond to OnDebuggerBreak.
+// If the GUI is frozen or closed, the debugger thread resumes automatically
+// rather than hanging forever.
+constexpr DWORD kDebugEventTimeoutMs = 60000;
+}
+
 DWORD clsDebugger::CallBreakDebugger(DEBUG_EVENT *debug_event,DWORD dwHandle)
 {
 	switch(dwHandle)
@@ -987,7 +1013,8 @@ DWORD clsDebugger::CallBreakDebugger(DEBUG_EVENT *debug_event,DWORD dwHandle)
 					clsAPIImport::pWow64GetThreadContext(hThread,&wowProcessContext);
 
 				emit OnDebuggerBreak();
-				WaitForSingleObject(m_debugEvent,INFINITE);
+				if(WaitForSingleObject(m_debugEvent, kDebugEventTimeoutMs) == WAIT_TIMEOUT)
+					emit OnLog("[!] GUI did not respond to break event within timeout — resuming");
 
 				if(hasThreadHandle)
 					clsAPIImport::pWow64SetThreadContext(hThread,&wowProcessContext);
@@ -998,7 +1025,8 @@ DWORD clsDebugger::CallBreakDebugger(DEBUG_EVENT *debug_event,DWORD dwHandle)
 					GetThreadContext(hThread,&ProcessContext);
 
 				emit OnDebuggerBreak();
-				WaitForSingleObject(m_debugEvent,INFINITE);
+				if(WaitForSingleObject(m_debugEvent, kDebugEventTimeoutMs) == WAIT_TIMEOUT)
+					emit OnLog("[!] GUI did not respond to break event within timeout — resuming");
 
 				if(hasThreadHandle)
 					SetThreadContext(hThread,&ProcessContext);
@@ -1009,7 +1037,8 @@ DWORD clsDebugger::CallBreakDebugger(DEBUG_EVENT *debug_event,DWORD dwHandle)
 				GetThreadContext(hThread,&ProcessContext);
 
 			emit OnDebuggerBreak();
-			WaitForSingleObject(m_debugEvent,INFINITE);
+			if(WaitForSingleObject(m_debugEvent, kDebugEventTimeoutMs) == WAIT_TIMEOUT)
+				emit OnLog("[!] GUI did not respond to break event within timeout — resuming");
 
 			if(hasThreadHandle)
 				SetThreadContext(hThread,&ProcessContext);
@@ -1275,18 +1304,19 @@ void clsDebugger::SetNewThreadContext(bool isWow64, CONTEXT newProcessContext, W
 
 PIDStruct* clsDebugger::GetCurrentPIDDataPointer(DWORD processID)
 {
-	PIDStruct *pCurrentPID = NULL;
-	int countPID = PIDs.size();
+	const int countPID = PIDs.size();
 
-	for(int i = 0;i < countPID; i++)
+	for(int i = 0; i < countPID; i++)
 	{
-		pCurrentPID = &PIDs[i];
-
-		if(pCurrentPID->dwPID == processID)
-		{
-			return pCurrentPID;
-		}
+		if(PIDs[i].dwPID == processID)
+			return &PIDs[i];
 	}
 
-	return pCurrentPID; // should never happen
+	// Returning the last (unrelated) PID entry would silently corrupt state.
+	// Return nullptr so callers that dereference without checking crash visibly
+	// instead of operating on wrong data. Callers in the debug loop should
+	// always find the PID; if not, a debug-event mismatch has occurred.
+	emit OnLog(QString("[!] GetCurrentPIDDataPointer: PID %1 not found in table")
+		.arg(processID, 8, 16, QChar('0')));
+	return nullptr;
 }

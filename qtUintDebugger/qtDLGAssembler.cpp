@@ -33,8 +33,8 @@ qtDLGAssembler::qtDLGAssembler(QWidget *parent, Qt::WindowFlags flags, HANDLE pr
 	this->setAttribute(Qt::WA_DeleteOnClose,true);
 	this->setFixedSize(this->width(),this->height());
 
-	connect(new QShortcut(QKeySequence(Qt::Key_Escape),this),SIGNAL(activated()),this,SLOT(close()));
-	connect(lineEdit,SIGNAL(returnPressed()),this,SLOT(InsertNewInstructions()));
+	connect(new QShortcut(QKeySequence(Qt::Key_Escape),this),&QShortcut::activated,this,&qtDLGAssembler::close);
+	connect(lineEdit,&QLineEdit::returnPressed,this,&qtDLGAssembler::InsertNewInstructions);
 
 	this->setWindowTitle(QString("Assemble at %1").arg(instructionOffset,16,16,QChar('0')));
 

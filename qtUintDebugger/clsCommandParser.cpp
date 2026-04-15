@@ -26,6 +26,7 @@
 #include "qtDLGWatch.h"
 
 #include <Windows.h>
+#include "BeaEngine.h"
 
 // ---------------------------------------------------------------------------
 // Resolve an address token: "0x1234", "1234" (hex), or "module::export".
@@ -122,30 +123,60 @@ QString clsCommandParser::Execute(const QString &rawCmd)
     // --- p : step over -----------------------------------------------------
     if(verb == "p")
     {
+        if(!dbg->IsBreaking())
+            return QStringLiteral("[cmd] p: only valid while the debugger is at a break point.");
+
         quint64 eip = 0;
+        bool    isWow = false;
 #ifdef _AMD64_
-        BOOL isWow = FALSE;
+        BOOL bWow = FALSE;
         if(clsAPIImport::pIsWow64Process)
-            clsAPIImport::pIsWow64Process(dbg->GetCurrentProcessHandle(), &isWow);
-        eip = isWow ? dbg->wowProcessContext.Eip : dbg->ProcessContext.Rip;
+            clsAPIImport::pIsWow64Process(dbg->GetCurrentProcessHandle(), &bWow);
+        isWow = (bWow != 0);
+        eip = isWow ? (quint64)dbg->wowProcessContext.Eip
+                    : (quint64)dbg->ProcessContext.Rip;
 #else
-        eip = dbg->ProcessContext.Eip;
+        eip = (quint64)dbg->ProcessContext.Eip;
 #endif
         if(eip == 0)
-            return QStringLiteral("[cmd] ERROR: cannot determine EIP/RIP.");
+            return QStringLiteral("[cmd] p: cannot determine EIP/RIP.");
 
-        // Read instruction length via disassembler helper and place step-over BP
-        // We use clsDisassembler indirectly: just place a STEPOVER BP one byte
-        // ahead isn't reliable — delegate to the existing StepOver API which
-        // expects the *next* instruction address; use StepIn instead as fallback
-        // and let the UI handle it identically to F8.
-        dbg->StepIn(); // safe fallback — proper StepOver is wired through UI
-        return QStringLiteral("[cmd] Step over (via step-in; use F8 for full step-over).");
+        // Read up to 16 bytes of the current instruction from the target process.
+        HANDLE hProc = dbg->GetCurrentProcessHandle();
+        BYTE instrBuf[16] = {};
+        SIZE_T bytesRead = 0;
+        ReadProcessMemory(hProc, (LPCVOID)eip, instrBuf, sizeof(instrBuf), &bytesRead);
+        if(bytesRead == 0)
+            return QStringLiteral("[cmd] p: ReadProcessMemory failed at 0x%1.")
+                .arg(eip, 16, 16, QChar('0'));
+
+        // Decode with BeaEngine to find the instruction length.
+        DISASM da = {};
+        da.EIP          = (UIntPtr)instrBuf;
+        da.VirtualAddr  = (UInt64)eip;
+        da.Archi        = isWow ? 0 : 64;   // 0 = x86, 64 = x86-64
+        da.SecurityBlock = (UInt32)bytesRead;
+        const int instrLen = Disasm(&da);
+        if(instrLen <= 0 || instrLen == UNKNOWN_OPCODE)
+            return QStringLiteral("[cmd] p: cannot decode instruction at 0x%1.")
+                .arg(eip, 16, 16, QChar('0'));
+
+        // Place a BP_STEPOVER at the next instruction and resume.
+        const quint64 nextEip = eip + (quint64)instrLen;
+        if(!dbg->StepOver(nextEip))
+            return QStringLiteral("[cmd] p: StepOver failed.");
+
+        return QStringLiteral("[cmd] Step over → 0x%1.")
+            .arg(nextEip, 16, 16, QChar('0'));
     }
 
     // --- r : register dump -------------------------------------------------
     if(verb == "r")
     {
+        // Context is only valid (and non-racy) while the debug thread is blocked.
+        if(!dbg->IsBreaking())
+            return QStringLiteral("[cmd] r: registers are only valid at a break point.");
+
         QString out;
 #ifdef _AMD64_
         BOOL isWow = FALSE;
@@ -379,9 +410,9 @@ QString clsCommandParser::Execute(const QString &rawCmd)
             "  bd  <addr>          — delete BP at address\n"
             "  bc                  — clear all BPs\n"
             "  g                   — resume\n"
-            "  t                   — step in\n"
-            "  p                   — step over\n"
-            "  r                   — dump registers\n"
+            "  t                   — step in  (requires break)\n"
+            "  p                   — step over (requires break; uses BeaEngine disasm)\n"
+            "  r                   — dump registers (requires break)\n"
             "  db  <addr>          — hex dump 128 bytes\n"
             "  eval <expr>         — evaluate expression\n"
             "  w   <expr>          — add to watch window\n"

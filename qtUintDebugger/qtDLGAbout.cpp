@@ -25,7 +25,7 @@ qtDLGAbout::qtDLGAbout(QWidget *parent, Qt::WindowFlags flags)
 	ui.setupUi(this);
 	setFixedSize(width(), height());
 	setStyleSheet(clsHelperClass::LoadStyleSheet());
-	connect(ui.buttonBox, SIGNAL(accepted()), this, SLOT(accept()));
+	connect(ui.buttonBox, &QDialogButtonBox::accepted, this, &qtDLGAbout::accept);
 
 	ui.versionChip->setText(QStringLiteral("v" UINTDEBUGGER_VERSION_STRING));
 	ui.aboutBuildInfo->setText(

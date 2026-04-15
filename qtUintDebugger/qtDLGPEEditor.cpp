@@ -30,8 +30,8 @@ qtDLGPEEditor::qtDLGPEEditor(clsPEManager *PEManager,QWidget *parent, Qt::Window
 	this->setLayout(verticalLayout);
 	this->setAttribute(Qt::WA_DeleteOnClose,true);
 
-	connect(treePE,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomContextMenu(QPoint)));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
+	connect(treePE,&QWidget::customContextMenuRequested,this,&qtDLGPEEditor::OnCustomContextMenu);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGPEEditor::close);
 
 	m_processID = PID;
 	m_pEManager = PEManager;
@@ -335,7 +335,7 @@ void qtDLGPEEditor::OnCustomContextMenu(QPoint qPoint)
 	m_selectedOffset = selectedItems.value(0)->text(1).toULongLong(0,16);
 
 	menu.addAction(new QAction("Show Offset in disassembler",this));
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGPEEditor::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }

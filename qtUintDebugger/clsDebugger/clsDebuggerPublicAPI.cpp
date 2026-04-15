@@ -21,7 +21,7 @@
 #include "clsAPIImport.h"
 #include "clsHelperClass.h"
 
-#include <dbghelp.h>
+#include "dbghelp.h"
 
 using namespace std;
 

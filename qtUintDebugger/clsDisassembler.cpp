@@ -34,7 +34,7 @@ clsDisassembler::clsDisassembler()
 	
 	this->setAutoDelete(false);
 
-	connect(this,SIGNAL(finished()),this,SLOT(OnThreadFinished()),Qt::QueuedConnection);
+	connect(this,&clsDisassembler::finished,this,&clsDisassembler::OnThreadFinished,Qt::QueuedConnection);
 }
 
 clsDisassembler::~clsDisassembler()

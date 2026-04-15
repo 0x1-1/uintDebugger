@@ -72,7 +72,7 @@ void qtDLGLogView::MenuCallback(QAction* pAction)
 		tblLogBox->setRowCount(0);	
 	else if(QString().compare(pAction->text(),"Write Log to File") == 0)
 	{
-		QString fileName = QFileDialog::getSaveFileName(this,"Please select a place to save the Logfile",QDir::currentPath(),"Log files (*.log)",NULL,QFileDialog::DontUseNativeDialog);
+		QString fileName = QFileDialog::getSaveFileName(this,"Please select a place to save the Logfile",QDir::currentPath(),"Log files (*.log)");
 		if(fileName.length() <= 0) return;
 		
 		QFile tempOutput(fileName);

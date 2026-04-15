@@ -28,7 +28,7 @@ qtDLGSourceViewer::qtDLGSourceViewer(QWidget *parent, Qt::WindowFlags flags)
 	setupUi(this);
 	this->setLayout(verticalLayout);
 
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGSourceViewer::close);
 }
 
 qtDLGSourceViewer::~qtDLGSourceViewer()

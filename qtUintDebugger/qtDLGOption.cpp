@@ -50,17 +50,17 @@ qtDLGOption::qtDLGOption(QWidget *parent, Qt::WindowFlags flags)
 	OnLoad();
 
 	// Events for the GUI
-	connect(cbLoadSym, SIGNAL(stateChanged(int)), this, SLOT(SetUseSym(int)));
-	connect(cbMSSym, SIGNAL(stateChanged(int)), this, SLOT(OnMSSymWarning(int)));
-	connect(tblCustomExceptions,SIGNAL(customContextMenuRequested(const QPoint &)),this,SLOT(OnRightClickCustomException(const QPoint &)));
-	connect(btnClose,SIGNAL(clicked()),this,SLOT(OnClose()));
-	connect(btnReload,SIGNAL(clicked()),this,SLOT(OnReload()));
-	connect(btnSave,SIGNAL(clicked()),this,SLOT(OnSave()));
-	connect(pbSetUintDebugger,SIGNAL(clicked()),this,SLOT(OnSetUintDebuggerDefault()));
-	connect(pbRestoreOrg,SIGNAL(clicked()),this,SLOT(OnRestoreOrg()));
-	connect(bpRegisterNDB,SIGNAL(clicked()),this,SLOT(EnableNDBExtension()));
-	connect(bpUnregisterNDB,SIGNAL(clicked()),this,SLOT(DisableNDBExtension()));
-	connect(new QShortcut(QKeySequence(QKeySequence::Delete),this),SIGNAL(activated()),this,SLOT(OnExceptionRemove()));
+	connect(cbLoadSym, &QCheckBox::stateChanged, this, &qtDLGOption::SetUseSym);
+	connect(cbMSSym, &QCheckBox::stateChanged, this, &qtDLGOption::OnMSSymWarning);
+	connect(tblCustomExceptions,&QWidget::customContextMenuRequested,this,&qtDLGOption::OnRightClickCustomException);
+	connect(btnClose,&QPushButton::clicked,this,&qtDLGOption::OnClose);
+	connect(btnReload,&QPushButton::clicked,this,&qtDLGOption::OnReload);
+	connect(btnSave,&QPushButton::clicked,this,&qtDLGOption::OnSave);
+	connect(pbSetUintDebugger,&QPushButton::clicked,this,&qtDLGOption::OnSetUintDebuggerDefault);
+	connect(pbRestoreOrg,&QPushButton::clicked,this,&qtDLGOption::OnRestoreOrg);
+	connect(bpRegisterNDB,&QPushButton::clicked,this,&qtDLGOption::EnableNDBExtension);
+	connect(bpUnregisterNDB,&QPushButton::clicked,this,&qtDLGOption::DisableNDBExtension);
+	connect(new QShortcut(QKeySequence(QKeySequence::Delete),this),&QShortcut::activated,this,&qtDLGOption::OnExceptionRemove);
 }
 
 qtDLGOption::~qtDLGOption()
@@ -88,7 +88,7 @@ void qtDLGOption::OnRightClickCustomException(const QPoint qPoint)
 			menu.addAction(new QAction("Insert Exception",this));
 	}
 
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGOption::MenuCallback);
 	menu.exec(QCursor::pos());
 }
 
@@ -456,14 +456,14 @@ void qtDLGOption::MenuCallback(QAction* pAction)
 	if(QString().compare(pAction->text(),"Insert Exception") == 0)
 	{
 		qtDLGExceptionEdit newExceptionEdit(this,Qt::Window);
-		connect(&newExceptionEdit,SIGNAL(OnInsertNewException(DWORD,int)),this,SLOT(OnInsertNewException(DWORD,int)));
+		connect(&newExceptionEdit,&qtDLGExceptionEdit::OnInsertNewException,this,&qtDLGOption::OnInsertNewException);
 		newExceptionEdit.exec();
 	}
 	else if(QString().compare(pAction->text(),"Edit Exception") == 0)
 	{
 		qtDLGExceptionEdit newExceptionEdit(this,Qt::Window,tblCustomExceptions->item(m_selectedRow,0)->text().toULong(0,16),
 			tblCustomExceptions->item(m_selectedRow,1)->text().toInt());
-		connect(&newExceptionEdit,SIGNAL(OnInsertNewException(DWORD,int)),this,SLOT(OnInsertNewException(DWORD,int)));
+		connect(&newExceptionEdit,&qtDLGExceptionEdit::OnInsertNewException,this,&qtDLGOption::OnInsertNewException);
 		newExceptionEdit.exec();
 	}
 	else if(QString().compare(pAction->text(),"Delete Exception") == 0)

@@ -33,8 +33,8 @@ qtDLGDebugStrings::qtDLGDebugStrings(QWidget *parent, Qt::WindowFlags flags)
 
 	setLayout(verticalLayout);
 
-	connect(tblDebugStrings,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomContextMenuRequested(QPoint)));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
+	connect(tblDebugStrings,&QWidget::customContextMenuRequested,this,&qtDLGDebugStrings::OnCustomContextMenuRequested);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGDebugStrings::close);
 }
 
 qtDLGDebugStrings::~qtDLGDebugStrings()
@@ -54,7 +54,7 @@ void qtDLGDebugStrings::OnCustomContextMenuRequested(QPoint qPoint)
 	submenu->addAction(new QAction("Debug String",this));
 
 	menu.addMenu(submenu);
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGDebugStrings::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }

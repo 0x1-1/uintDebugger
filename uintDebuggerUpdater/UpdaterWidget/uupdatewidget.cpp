@@ -307,9 +307,26 @@ void UUpdateWidget::slot_downloadFileFinished()
     QModelIndex index = model->index(m_currentDownloadFile, UUpdatesModel::ePACKAGE);
 
     const QString relativePath = QDir::fromNativeSeparators(model->data(index, Qt::DisplayRole).toString());
+
+    // Defence-in-depth: validate the path from the model before constructing the
+    // download destination. This mirrors the validation done when the manifest was
+    // first parsed; it guards against any in-memory model tampering.
+    const QString updRoot = updatesRootDir();
+    const QString resolvedTarget = QDir(updRoot).absoluteFilePath(relativePath);
+    const QString canonicalUpdRoot = QDir(updRoot).canonicalPath();
+    const bool pathSafe = !QFileInfo(relativePath).isAbsolute() &&
+                          !relativePath.split('/').contains(QStringLiteral("..")) &&
+                          (resolvedTarget.startsWith(canonicalUpdRoot + QDir::separator()) ||
+                           resolvedTarget == canonicalUpdRoot);
+    if(!pathSafe)
+    {
+        slot_error(tr("Blocked unsafe download path: %1").arg(relativePath));
+        return;
+    }
+
     createFolders(relativePath);
 
-    const QString targetPath = QDir(updatesRootDir()).filePath(relativePath);
+    const QString targetPath = resolvedTarget;
     index = model->index(m_currentDownloadFile, UUpdatesModel::eURI);
     m_downloader->slot_downloadFile(model->data(index, Qt::DisplayRole).toUrl(), targetPath);
 }

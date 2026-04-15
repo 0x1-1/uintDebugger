@@ -35,9 +35,9 @@ qtDLGHandleView::qtDLGHandleView(QWidget *parent, Qt::WindowFlags flags,qint32 p
 	this->setAttribute(Qt::WA_DeleteOnClose,true);
 	this->setLayout(verticalLayout);
 
-	connect(tblHandleView,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomContextMenuRequested(QPoint)));
-	connect(new QShortcut(QKeySequence("F5"),this),SIGNAL(activated()),this,SLOT(OnDisplayHandles()));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
+	connect(tblHandleView,&QWidget::customContextMenuRequested,this,&qtDLGHandleView::OnCustomContextMenuRequested);
+	connect(new QShortcut(QKeySequence("F5"),this),&QShortcut::activated,this,&qtDLGHandleView::OnDisplayHandles);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGHandleView::close);
 	
 	// Init List
 	tblHandleView->horizontalHeader()->resizeSection(0,75);
@@ -194,7 +194,7 @@ void qtDLGHandleView::OnCustomContextMenuRequested(QPoint qPoint)
 	submenu->addAction(new QAction("Name",this));
 
 	menu.addMenu(submenu);
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGHandleView::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }

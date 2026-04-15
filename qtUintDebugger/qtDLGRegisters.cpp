@@ -55,8 +55,8 @@ qtDLGRegisters::qtDLGRegisters(QWidget *parent)
 
 	m_pDebugger = qtDLGUintDebugger::GetInstance()->coreDebugger;
 
-	connect(tblRegView,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnContextMenu(QPoint)));
-	connect(tblRegView,SIGNAL(itemDoubleClicked(QTableWidgetItem *)),this,SLOT(OnChangeRequest(QTableWidgetItem *)));
+	connect(tblRegView,&QWidget::customContextMenuRequested,this,&qtDLGRegisters::OnContextMenu);
+	connect(tblRegView,&QTableWidget::itemDoubleClicked,this,&qtDLGRegisters::OnChangeRequest);
 }
 
 qtDLGRegisters::~qtDLGRegisters()
@@ -130,7 +130,7 @@ void qtDLGRegisters::OnContextMenu(QPoint qPoint)
 	submenu->addAction(new QAction("Value",this));
 
 	menu.addMenu(submenu);
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGRegisters::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }
@@ -207,7 +207,7 @@ void qtDLGRegisters::OnChangeRequest(QTableWidgetItem *pItem)
 	newRegEditWindow = new qtDLGRegEdit(this,Qt::Window,&m_pDebugger->ProcessContext,false);			
 #endif	
 
-	connect(newRegEditWindow,SIGNAL(OnUpdateRegView()),this,SLOT(LoadRegView()));
+	connect(newRegEditWindow,&qtDLGRegEdit::OnUpdateRegView,this,&qtDLGRegisters::LoadRegView);
 	newRegEditWindow->exec();
 }
 

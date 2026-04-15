@@ -34,8 +34,8 @@ qtDLGGoToDialog::qtDLGGoToDialog(QString *pData, QStringList completerList, QWid
 	m_pLineCompleter->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
 	lineEdit->setCompleter(m_pLineCompleter);
 
-	connect(new QShortcut(QKeySequence(Qt::Key_Escape),this),SIGNAL(activated()),this,SLOT(close()));
-	connect(lineEdit,SIGNAL(returnPressed()),this,SLOT(OpenNewData()));
+	connect(new QShortcut(QKeySequence(Qt::Key_Escape),this),&QShortcut::activated,this,&qtDLGGoToDialog::close);
+	connect(lineEdit,&QLineEdit::returnPressed,this,&qtDLGGoToDialog::OpenNewData);
 }
 
 qtDLGGoToDialog::~qtDLGGoToDialog()

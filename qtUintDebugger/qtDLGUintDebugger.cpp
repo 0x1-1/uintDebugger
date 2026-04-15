@@ -31,9 +31,13 @@
 #include "uintDebuggerVersion.h"
 
 #include <Psapi.h>
+#include <shellapi.h>
 #include <QStandardPaths>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
+#include <QCryptographicHash>
+#include <QFileInfo>
 #include <QTimer>
 #include <QMessageBox>
 #include <QStatusBar>
@@ -537,10 +541,18 @@ void qtDLGUintDebugger::dragEnterEvent(QDragEnterEvent* pEvent)
 }
 
 void qtDLGUintDebugger::dropEvent(QDropEvent* pEvent)
-{ 
+{
 	if(pEvent->mimeData()->hasUrls())
     {
-		QString droppedFile = QString(pEvent->mimeData()->data("FileName"));
+		// Use the standard QMimeData URL API. mimeData()->data("FileName") is not
+		// reliable across Qt6 and Windows shell drag sources; urls() always works.
+		const QList<QUrl> urls = pEvent->mimeData()->urls();
+		if(urls.isEmpty())
+		{
+			pEvent->acceptProposedAction();
+			return;
+		}
+		QString droppedFile = urls.first().toLocalFile();
 
 		if(droppedFile.contains(".lnk", Qt::CaseInsensitive))
 		{
@@ -575,22 +587,63 @@ void qtDLGUintDebugger::dropEvent(QDropEvent* pEvent)
     }
 }
 
-QString qtDLGUintDebugger::AutosavePath()
+QString qtDLGUintDebugger::AutosaveDir()
 {
 	QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
 	QDir().mkpath(dir);
-	return dir + "/autosave.ndb";
+	return dir;
+}
+
+QString qtDLGUintDebugger::AutosavePath()
+{
+	// Use a target-specific filename so sessions for different targets do not
+	// overwrite each other's autosave.  Fall back to the legacy name when no
+	// target is set (e.g. pure project-file load without a running session).
+	const QString target = coreDebugger->GetTarget();
+	if(!target.isEmpty())
+	{
+		const QByteArray hash = QCryptographicHash::hash(
+			target.toUtf8(), QCryptographicHash::Md5);
+		return AutosaveDir() + "/autosave_" + QString::fromLatin1(hash.toHex()) + ".ndb";
+	}
+	return AutosaveDir() + "/autosave.ndb";
 }
 
 void qtDLGUintDebugger::AutosaveSave()
 {
-	clsProjectFile(true, nullptr, AutosavePath());
+	// bSilent=true: autosave must never pop a dialog.
+	clsProjectFile(true, nullptr, AutosavePath(), /*bSilent=*/true);
 }
 
 void qtDLGUintDebugger::AutosaveRestore()
 {
-	const QString path = AutosavePath();
-	if(!QFile::exists(path))
+	// 1. Look for per-target autosaves (autosave_*.ndb) and pick the newest.
+	// 2. Fall back to the legacy autosave.ndb if nothing else is found.
+	const QString dir = AutosaveDir();
+	QString bestPath;
+	QDateTime bestTime;
+
+	QDirIterator it(dir, QStringList() << "autosave_*.ndb", QDir::Files);
+	while(it.hasNext())
+	{
+		const QString candidate = it.next();
+		const QDateTime modified = QFileInfo(candidate).lastModified();
+		if(bestPath.isEmpty() || modified > bestTime)
+		{
+			bestPath = candidate;
+			bestTime = modified;
+		}
+	}
+
+	if(bestPath.isEmpty())
+	{
+		// Legacy fallback
+		const QString legacy = dir + "/autosave.ndb";
+		if(QFile::exists(legacy))
+			bestPath = legacy;
+	}
+
+	if(bestPath.isEmpty())
 		return;
 
 	const auto btn = QMessageBox::question(this,
@@ -603,7 +656,7 @@ void qtDLGUintDebugger::AutosaveRestore()
 		return;
 
 	bool startDebugging = false;
-	clsProjectFile(false, &startDebugging, path);
+	clsProjectFile(false, &startDebugging, bestPath, /*bSilent=*/true);
 	if(startDebugging)
 		action_DebugStart();
 }
@@ -635,8 +688,18 @@ void qtDLGUintDebugger::closeEvent(QCloseEvent* closeEvent)
 
 void qtDLGUintDebugger::ParseCommandLineArgs()
 {
-	PTCHAR currentCommandLine = GetCommandLineW();
-	QStringList splittedCommandLine = QString::fromWCharArray(currentCommandLine, wcslen(currentCommandLine)).split(" ");
+	// CommandLineToArgvW correctly handles quoted paths and arguments; the naive
+	// .split(" ") approach breaks whenever either path contains spaces.
+	int argc = 0;
+	LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+	if(!argv)
+		return;
+
+	QStringList splittedCommandLine;
+	splittedCommandLine.reserve(argc);
+	for(int k = 0; k < argc; ++k)
+		splittedCommandLine.append(QString::fromWCharArray(argv[k]));
+	LocalFree(argv);
 
 	for(QStringList::const_iterator i = splittedCommandLine.constBegin(); i != splittedCommandLine.constEnd(); ++i)
 	{

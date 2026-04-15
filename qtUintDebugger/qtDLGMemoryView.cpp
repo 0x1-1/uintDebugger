@@ -36,9 +36,9 @@ qtDLGMemoryView::qtDLGMemoryView(QWidget *parent, Qt::WindowFlags flags,qint32 p
 	this->setAttribute(Qt::WA_DeleteOnClose,true);
 	this->setLayout(verticalLayout);
 	
-	connect(tblMemoryView,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomContextMenuRequested(QPoint)));
-	connect(new QShortcut(QKeySequence("F5"),this),SIGNAL(activated()),this,SLOT(DisplayMemory()));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
+	connect(tblMemoryView,&QWidget::customContextMenuRequested,this,&qtDLGMemoryView::OnCustomContextMenuRequested);
+	connect(new QShortcut(QKeySequence("F5"),this),&QShortcut::activated,this,&qtDLGMemoryView::DisplayMemory);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGMemoryView::close);
 
 	// Init List
 	tblMemoryView->horizontalHeader()->resizeSection(0,75);
@@ -166,7 +166,7 @@ void qtDLGMemoryView::OnCustomContextMenuRequested(QPoint qPoint)
 		menu.addMenu(protectionMenu);
 	}
 
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGMemoryView::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }

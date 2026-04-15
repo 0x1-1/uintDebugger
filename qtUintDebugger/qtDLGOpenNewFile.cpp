@@ -48,9 +48,9 @@ qtDLGOpenNewFile::qtDLGOpenNewFile(QWidget *parent)
 	mainLayout->addLayout(argumentLayout);
 	mainLayout->addWidget(m_buttonBox);
 
-	connect(m_browseButton, SIGNAL(clicked()), this, SLOT(BrowseForTarget()));
-	connect(m_buttonBox, SIGNAL(accepted()), this, SLOT(AcceptSelection()));
-	connect(m_buttonBox, SIGNAL(rejected()), this, SLOT(reject()));
+	connect(m_browseButton, &QPushButton::clicked, this, &qtDLGOpenNewFile::BrowseForTarget);
+	connect(m_buttonBox, &QDialogButtonBox::accepted, this, &qtDLGOpenNewFile::AcceptSelection);
+	connect(m_buttonBox, &QDialogButtonBox::rejected, this, &qtDLGOpenNewFile::reject);
 }
 
 qtDLGOpenNewFile::~qtDLGOpenNewFile()
@@ -59,15 +59,10 @@ qtDLGOpenNewFile::~qtDLGOpenNewFile()
 
 void qtDLGOpenNewFile::BrowseForTarget()
 {
-	QFileDialog::Options dialogOptions;
-	dialogOptions |= QFileDialog::DontUseNativeDialog;
-
 	QString filePath = QFileDialog::getOpenFileName(this,
 		"Please select a Target",
 		QDir::currentPath(),
-		"Executables (*.exe)",
-		nullptr,
-		dialogOptions);
+		"Executables (*.exe)");
 
 	if(!filePath.isEmpty())
 		m_filePathLine->setText(QDir::toNativeSeparators(filePath));

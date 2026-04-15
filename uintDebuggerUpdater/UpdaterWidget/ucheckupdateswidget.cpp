@@ -86,6 +86,32 @@ QByteArray ComputeSha256(const QString &absoluteFilePath, bool *fileOpened = 0)
     return hash.result().toHex().toLower();
 }
 
+// Returns true only if the relative path is safe: not absolute, contains no
+// traversal segments, and the resolved path stays inside rootDir.
+bool IsPathSafe(const QString &relativePath, const QString &rootDir)
+{
+    if(relativePath.isEmpty())
+        return false;
+
+    // Reject absolute paths outright.
+    if(QFileInfo(relativePath).isAbsolute())
+        return false;
+
+    // Reject any component that is exactly ".." (catches "a/../../etc/passwd").
+    const QStringList parts = relativePath.split('/');
+    for(const QString &part : parts)
+    {
+        if(part == QStringLiteral(".."))
+            return false;
+    }
+
+    // Final check: resolve and confirm the path is still under rootDir.
+    const QString resolved = QDir(rootDir).absoluteFilePath(relativePath);
+    const QString canonicalRoot = QDir(rootDir).canonicalPath();
+    return resolved.startsWith(canonicalRoot + QDir::separator()) ||
+           resolved == canonicalRoot;
+}
+
 bool ParseManifestFile(const QString &manifestPath, QList<UManifestEntry> *entries, QString *errorMessage)
 {
     QFile file(manifestPath);
@@ -114,6 +140,8 @@ bool ParseManifestFile(const QString &manifestPath, QList<UManifestEntry> *entri
         return false;
     }
 
+    const QString rootDir = AppDirPath();
+
     entries->clear();
     for(QJsonArray::const_iterator it = files.constBegin(); it != files.constEnd(); ++it)
     {
@@ -129,6 +157,14 @@ bool ParseManifestFile(const QString &manifestPath, QList<UManifestEntry> *entri
 
         if(entry.relativePath.isEmpty() || entry.assetName.isEmpty())
             continue;
+
+        // Reject any entry whose path could escape the application root.
+        if(!IsPathSafe(entry.relativePath, rootDir))
+        {
+            if(errorMessage != 0)
+                *errorMessage = QStringLiteral("Update manifest contains unsafe path: %1").arg(entry.relativePath);
+            return false;
+        }
 
         entries->append(entry);
     }

@@ -39,8 +39,8 @@ qtDLGStack::qtDLGStack(QWidget *parent)
 	tblStack->horizontalHeader()->resizeSection(2,300);
 	tblStack->horizontalHeader()->setFixedHeight(21);
 
-	connect(scrollStackView,SIGNAL(valueChanged(int)),this,SLOT(OnStackScroll(int)));
-	connect(tblStack,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnContextMenu(QPoint)));
+	connect(scrollStackView,&QScrollBar::valueChanged,this,&qtDLGStack::OnStackScroll);
+	connect(tblStack,&QWidget::customContextMenuRequested,this,&qtDLGStack::OnContextMenu);
 }
 
 qtDLGStack::~qtDLGStack()
@@ -199,7 +199,7 @@ void qtDLGStack::OnContextMenu(QPoint qPoint)
 	submenu->addAction(new QAction("Comment",this));
 
 	menu.addMenu(submenu);
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGStack::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }

@@ -58,11 +58,11 @@ qtDLGWindowView::qtDLGWindowView(QWidget *parent, Qt::WindowFlags flags,qint32 p
 		}
 	}
 
-	connect(new QShortcut(QKeySequence("F5"),this),SIGNAL(activated()),this,SLOT(EnumWindow()));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
+	connect(new QShortcut(QKeySequence("F5"),this),&QShortcut::activated,this,&qtDLGWindowView::EnumWindow);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGWindowView::close);
 
 	SetPlaceholderRow(tblWindowView, QStringLiteral("Loading windows..."));
-	QTimer::singleShot(0, this, SLOT(EnumWindow()));
+	QTimer::singleShot(0, this, &qtDLGWindowView::EnumWindow);
 }
 
 qtDLGWindowView::~qtDLGWindowView()

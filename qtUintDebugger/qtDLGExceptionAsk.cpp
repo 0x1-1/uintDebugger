@@ -32,9 +32,9 @@ qtDLGExceptionAsk::qtDLGExceptionAsk(DWORD exceptionCode, QWidget *parent, Qt::W
 
 	lableState->setText(QString("ExceptionCode: %1").arg(exceptionCode,8,16,QChar('0')));
 
-	connect(pbIgnore,SIGNAL(clicked()),this,SLOT(ExceptionIgnore()));
-	connect(pbApp,SIGNAL(clicked()),this,SLOT(ExceptionSendToApp()));
-	connect(pbBreak,SIGNAL(clicked()),this,SLOT(ExceptionBreak()));
+	connect(pbIgnore,&QPushButton::clicked,this,&qtDLGExceptionAsk::ExceptionIgnore);
+	connect(pbApp,&QPushButton::clicked,this,&qtDLGExceptionAsk::ExceptionSendToApp);
+	connect(pbBreak,&QPushButton::clicked,this,&qtDLGExceptionAsk::ExceptionBreak);
 }
 
 qtDLGExceptionAsk::~qtDLGExceptionAsk()

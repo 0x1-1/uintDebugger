@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "PathSafety.h"
+
 namespace fs = std::filesystem;
 
 namespace
@@ -102,7 +104,7 @@ int wmain(int argc, wchar_t **argv)
     if(!skipSelfUpdate && ContainsUpdaterFile(relativeFiles))
     {
         const fs::path downloadedUpdater = updatesDirectory / L"updater.exe";
-        if(fs::exists(downloadedUpdater))
+        if(fs::exists(downloadedUpdater) && UpdaterSafety::IsSourceRegularFile(downloadedUpdater))
         {
             CopyUpdateFile(downloadedUpdater, temporaryUpdater);
 
@@ -115,17 +117,32 @@ int wmain(int argc, wchar_t **argv)
         }
     }
 
+    // Validate ALL paths before touching the filesystem.  Any bad entry
+    // aborts the entire update — a partial apply is worse than no apply.
     for(std::vector<std::wstring>::const_iterator it = relativeFiles.begin(); it != relativeFiles.end(); ++it)
     {
         const fs::path relativePath = fs::path(*it).lexically_normal();
-        if(relativePath.empty())
-            continue;
+        if(!UpdaterSafety::IsPathSafe(relativePath, appDirectory))
+            return 1; // hostile/malformed manifest — abort everything
+    }
 
+    // Second pass: apply validated files.
+    for(std::vector<std::wstring>::const_iterator it = relativeFiles.begin(); it != relativeFiles.end(); ++it)
+    {
+        const fs::path relativePath = fs::path(*it).lexically_normal();
         const fs::path sourcePath = updatesDirectory / relativePath;
         const fs::path destinationPath = appDirectory / relativePath;
 
-        if(fs::exists(sourcePath))
-            CopyUpdateFile(sourcePath, destinationPath);
+        if(!fs::exists(sourcePath))
+            continue;
+
+        // Refuse to copy symlinks from the updates directory — a symlink
+        // could point anywhere on the filesystem, bypassing the destination
+        // path check performed above.
+        if(!UpdaterSafety::IsSourceRegularFile(sourcePath))
+            return 1;
+
+        CopyUpdateFile(sourcePath, destinationPath);
     }
 
     std::error_code removeError;

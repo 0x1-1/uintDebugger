@@ -37,11 +37,11 @@ qtDLGBookmark::qtDLGBookmark(QWidget *parent, Qt::WindowFlags flags) :
 	tblBookmark->horizontalHeader()->resizeSection(1,125);
 	tblBookmark->horizontalHeader()->setFixedHeight(21);
 
-	connect(new QShortcut(QKeySequence("F5"), this), SIGNAL(activated()), this, SLOT(UpdateDisplay()));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
-	connect(new QShortcut(QKeySequence(QKeySequence::Delete), this), SIGNAL(activated()), this, SLOT(RemoveSelectedBookmark()));
-	connect(tblBookmark,SIGNAL(itemDoubleClicked(QTableWidgetItem *)),this,SLOT(SendToDisassembler(QTableWidgetItem *)));
-	connect(tblBookmark,SIGNAL(cellChanged(int,int)),this,SLOT(CellDataChanged(int,int)));
+	connect(new QShortcut(QKeySequence("F5"), this), &QShortcut::activated, this, &qtDLGBookmark::UpdateDisplay);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGBookmark::close);
+	connect(new QShortcut(QKeySequence(QKeySequence::Delete), this), &QShortcut::activated, this, &qtDLGBookmark::RemoveSelectedBookmark);
+	connect(tblBookmark,&QTableWidget::itemDoubleClicked,this,&qtDLGBookmark::SendToDisassembler);
+	connect(tblBookmark,&QTableWidget::cellChanged,this,&qtDLGBookmark::CellDataChanged);
 }
 
 qtDLGBookmark::~qtDLGBookmark()

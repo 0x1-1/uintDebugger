@@ -42,12 +42,12 @@ qtDLGAttach::qtDLGAttach(QWidget *parent, Qt::WindowFlags flags)
 	tblProcList->horizontalHeader()->resizeSection(2,50);
 	tblProcList->horizontalHeader()->setFixedHeight(21);
 
-	connect(tblProcList,SIGNAL(cellDoubleClicked(int,int)),this,SLOT(OnProcessDoubleClick(int,int)));
-	connect(new QShortcut(QKeySequence("F5"),this),SIGNAL(activated()),this,SLOT(FillProcessList()));
-	connect(new QShortcut(QKeySequence::InsertParagraphSeparator,this),SIGNAL(activated()),this,SLOT(OnReturnPressed()));
+	connect(tblProcList,&QTableWidget::cellDoubleClicked,this,&qtDLGAttach::OnProcessDoubleClick);
+	connect(new QShortcut(QKeySequence("F5"),this),&QShortcut::activated,this,&qtDLGAttach::FillProcessList);
+	connect(new QShortcut(QKeySequence::InsertParagraphSeparator,this),&QShortcut::activated,this,&qtDLGAttach::OnReturnPressed);
 
 	SetPlaceholderRow(tblProcList, QStringLiteral("Loading process list..."));
-	QTimer::singleShot(0, this, SLOT(FillProcessList()));
+	QTimer::singleShot(0, this, &qtDLGAttach::FillProcessList);
 }
 
 qtDLGAttach::~qtDLGAttach()

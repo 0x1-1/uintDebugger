@@ -26,8 +26,7 @@ clsProcessDump::clsProcessDump(HANDLE processHandle, DWORD processID, QString fi
 		"Please select a path to save the dump",
 		QString("DUMP_%1_%2.dmp").arg(filePath).arg(processID,6,10,QChar('0')),
 		"Dump files (*.dmp)",
-		NULL,
-		QFileDialog::DontUseNativeDialog);
+		NULL);
 
 	if(dumpFilePath.length() <= 0) return;
 

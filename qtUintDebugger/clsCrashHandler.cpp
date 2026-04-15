@@ -16,7 +16,7 @@
  */
 #include "clsCrashHandler.h"
 
-#include <dbghelp.h>
+#include "dbghelp.h"
 #include <strsafe.h>
 #include <stdio.h>
 #include <time.h>

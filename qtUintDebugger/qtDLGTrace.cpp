@@ -47,11 +47,11 @@ qtDLGTrace::qtDLGTrace(QWidget *parent, Qt::WindowFlags flags)
 	tblTraceLog->horizontalHeader()->resizeSection(3,300); //Symbol.
 	tblTraceLog->horizontalHeader()->setFixedHeight(21);
 
-	connect(m_statusBarTimer,SIGNAL(timeout()),this,SLOT(OnUpdateStatusBar()));
-	connect(tblTraceLog,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomContextMenu(QPoint)));
-	connect(tblTraceLog,SIGNAL(itemDoubleClicked(QTableWidgetItem *)),this,SLOT(OnDoubleClickFunction(QTableWidgetItem *)));
-	connect(scrollTrace,SIGNAL(valueChanged(int)),this,SLOT(OnShow(int)));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
+	connect(m_statusBarTimer,&QTimer::timeout,this,&qtDLGTrace::OnUpdateStatusBar);
+	connect(tblTraceLog,&QWidget::customContextMenuRequested,this,&qtDLGTrace::OnCustomContextMenu);
+	connect(tblTraceLog,&QTableWidget::itemDoubleClicked,this,&qtDLGTrace::OnDoubleClickFunction);
+	connect(scrollTrace,&QScrollBar::valueChanged,this,&qtDLGTrace::OnShow);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGTrace::close);
 }
 
 qtDLGTrace::~qtDLGTrace()
@@ -168,7 +168,7 @@ void qtDLGTrace::OnCustomContextMenu(QPoint qPoint)
 	if(m_iSelectedRow < 0) return;
 
 	menu.addAction(new QAction("Send to Disassembler",this));
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGTrace::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }

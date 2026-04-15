@@ -66,11 +66,11 @@ qtDLGDetailInfo::qtDLGDetailInfo(QWidget *parent, Qt::WindowFlags flags)
 	tblModules->horizontalHeader()->setFixedHeight(21);
 	tabModuleDetails->setLayout(layoutModule);
 
-	connect(tblTIDs,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomTIDContextMenu(QPoint)));
-	connect(tblPIDs,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomPIDContextMenu(QPoint)));
-	connect(tblExceptions,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomExceptionContextMenu(QPoint)));
-	connect(tblModules,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomModuleContextMenu(QPoint)));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
+	connect(tblTIDs,&QWidget::customContextMenuRequested,this,&qtDLGDetailInfo::OnCustomTIDContextMenu);
+	connect(tblPIDs,&QWidget::customContextMenuRequested,this,&qtDLGDetailInfo::OnCustomPIDContextMenu);
+	connect(tblExceptions,&QWidget::customContextMenuRequested,this,&qtDLGDetailInfo::OnCustomExceptionContextMenu);
+	connect(tblModules,&QWidget::customContextMenuRequested,this,&qtDLGDetailInfo::OnCustomModuleContextMenu);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGDetailInfo::close);
 }
 
 qtDLGDetailInfo::~qtDLGDetailInfo()
@@ -150,7 +150,7 @@ void qtDLGDetailInfo::OnCustomPIDContextMenu(QPoint qPoint)
 		menu.addMenu(submenu);
 	}
 
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(PIDMenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGDetailInfo::PIDMenuCallback);
 
 	menu.exec(QCursor::pos());
 }
@@ -220,7 +220,7 @@ void qtDLGDetailInfo::OnCustomTIDContextMenu(QPoint qPoint)
 		menu.addMenu(submenu);
 	}
 	
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGDetailInfo::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }
@@ -237,7 +237,7 @@ void qtDLGDetailInfo::OnCustomExceptionContextMenu(QPoint qPoint)
 	m_selectedOffset = tblExceptions->item(m_selectedRow,0)->text().toULongLong(0,16);
 
 	menu.addAction(new QAction("Show Offset in disassembler",this));
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGDetailInfo::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }
@@ -255,7 +255,7 @@ void qtDLGDetailInfo::OnCustomModuleContextMenu(QPoint qPoint)
 
 	menu.addAction(new QAction("Open Module in PE View",this));
 	menu.addAction(new QAction("Open Module in Function View",this));
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGDetailInfo::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }
@@ -311,7 +311,7 @@ void qtDLGDetailInfo::MenuCallback(QAction* pAction)
 	else if(QString().compare(pAction->text(),"Open Module in Function View") == 0)
 	{
 		qtDLGFunctions *dlgFunctions = new qtDLGFunctions(tblModules->item(m_selectedRow,0)->text().toULongLong(0,16), tblModules->item(m_selectedRow,3)->text(), this, Qt::Window);
-		connect(dlgFunctions,SIGNAL(ShowInDisAs(quint64)),qtDLGUintDebugger::GetInstance()->DisAsGUI,SLOT(OnDisplayDisassembly(quint64)),Qt::QueuedConnection);
+		connect(dlgFunctions,&qtDLGFunctions::ShowInDisAs,qtDLGUintDebugger::GetInstance()->DisAsGUI,&qtDLGDisassembler::OnDisplayDisassembly,Qt::QueuedConnection);
 		dlgFunctions->show();
 	}
 	else if(QString().compare(pAction->text(),"Show Offset in disassembler") == 0)

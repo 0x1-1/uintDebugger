@@ -58,10 +58,10 @@ qtDLGStringView::qtDLGStringView(QWidget *parent, Qt::WindowFlags flags, qint32 
 		}
 	}
 	
-	connect(stringScroll,SIGNAL(valueChanged(int)),this,SLOT(InsertDataFrom(int)));
-	connect(tblStringView,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomContextMenuRequested(QPoint)));
-	connect(new QShortcut(QKeySequence("F5"),this),SIGNAL(activated()),this,SLOT(DataProcessing()));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
+	connect(stringScroll,&QScrollBar::valueChanged,this,&qtDLGStringView::InsertDataFrom);
+	connect(tblStringView,&QWidget::customContextMenuRequested,this,&qtDLGStringView::OnCustomContextMenuRequested);
+	connect(new QShortcut(QKeySequence("F5"),this),&QShortcut::activated,this,&qtDLGStringView::DataProcessing);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGStringView::close);
 
 	DataProcessing();
 }
@@ -99,7 +99,7 @@ void qtDLGStringView::DataProcessing()
 		delete m_pStringProcessor;
 	}
 	m_pStringProcessor = new clsStringViewWorker(dataForProcessing);
-	connect(m_pStringProcessor,SIGNAL(finished()),this,SLOT(DisplayStrings()),Qt::QueuedConnection);
+	connect(m_pStringProcessor,&QThread::finished,this,&qtDLGStringView::DisplayStrings,Qt::QueuedConnection);
 }
 
 void qtDLGStringView::DisplayStrings()
@@ -199,7 +199,7 @@ void qtDLGStringView::OnCustomContextMenuRequested(QPoint qPoint)
 	submenu->addAction(new QAction("String",this));
 
 	menu.addMenu(submenu);
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGStringView::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }

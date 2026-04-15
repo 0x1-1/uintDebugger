@@ -35,8 +35,8 @@ qtDLGFunctions::qtDLGFunctions(qint32 processID, QWidget *parent, Qt::WindowFlag
 	SetPlaceholderRow(tblFunctions, QStringLiteral("Scanning functions..."));
 	m_maxRows = (tblFunctions->verticalHeader()->height() / 11) - 1;
 
-	connect(tblFunctions,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomContextMenu(QPoint)));
-	connect(tblFunctions,SIGNAL(itemDoubleClicked(QTableWidgetItem *)),this,SLOT(OnSendToDisassembler(QTableWidgetItem *)));
+	connect(tblFunctions,&QWidget::customContextMenuRequested,this,&qtDLGFunctions::OnCustomContextMenu);
+	connect(tblFunctions,&QTableWidget::itemDoubleClicked,this,&qtDLGFunctions::OnSendToDisassembler);
 
 	// Init List
 	tblFunctions->horizontalHeader()->resizeSection(0,75);
@@ -70,10 +70,10 @@ qtDLGFunctions::qtDLGFunctions(qint32 processID, QWidget *parent, Qt::WindowFlag
 	}
 	
 	m_pFunctionWorker = new clsFunctionsViewWorker(dataForProcessing);
-	connect(m_pFunctionWorker,SIGNAL(finished()),this,SLOT(DisplayFunctionLists()),Qt::QueuedConnection);
-	connect(functionScroll,SIGNAL(valueChanged(int)),this,SLOT(InsertDataFrom(int)));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
-	connect(new QShortcut(QKeySequence::InsertParagraphSeparator,this),SIGNAL(activated()),this,SLOT(OnReturnPressed()));
+	connect(m_pFunctionWorker,&QThread::finished,this,&qtDLGFunctions::DisplayFunctionLists,Qt::QueuedConnection);
+	connect(functionScroll,&QScrollBar::valueChanged,this,&qtDLGFunctions::InsertDataFrom);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGFunctions::close);
+	connect(new QShortcut(QKeySequence::InsertParagraphSeparator,this),&QShortcut::activated,this,&qtDLGFunctions::OnReturnPressed);
 }
 
 qtDLGFunctions::qtDLGFunctions(qint32 processID, QString modulePath, QWidget *parent, Qt::WindowFlags flags)
@@ -87,8 +87,8 @@ qtDLGFunctions::qtDLGFunctions(qint32 processID, QString modulePath, QWidget *pa
 	SetPlaceholderRow(tblFunctions, QStringLiteral("Scanning functions..."));
 	m_maxRows = (tblFunctions->verticalHeader()->height() / 11) - 1;
 
-	connect(tblFunctions,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomContextMenu(QPoint)));
-	connect(tblFunctions,SIGNAL(itemDoubleClicked(QTableWidgetItem *)),this,SLOT(OnSendToDisassembler(QTableWidgetItem *)));
+	connect(tblFunctions,&QWidget::customContextMenuRequested,this,&qtDLGFunctions::OnCustomContextMenu);
+	connect(tblFunctions,&QTableWidget::itemDoubleClicked,this,&qtDLGFunctions::OnSendToDisassembler);
 
 	// Init List
 	tblFunctions->horizontalHeader()->resizeSection(0,75);
@@ -108,10 +108,10 @@ qtDLGFunctions::qtDLGFunctions(qint32 processID, QString modulePath, QWidget *pa
 
 	
 	m_pFunctionWorker = new clsFunctionsViewWorker(dataForProcessing);
-	connect(m_pFunctionWorker,SIGNAL(finished()),this,SLOT(DisplayFunctionLists()),Qt::QueuedConnection);
-	connect(functionScroll,SIGNAL(valueChanged(int)),this,SLOT(InsertDataFrom(int)));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
-	connect(new QShortcut(QKeySequence::InsertParagraphSeparator,this),SIGNAL(activated()),this,SLOT(OnReturnPressed()));
+	connect(m_pFunctionWorker,&QThread::finished,this,&qtDLGFunctions::DisplayFunctionLists,Qt::QueuedConnection);
+	connect(functionScroll,&QScrollBar::valueChanged,this,&qtDLGFunctions::InsertDataFrom);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGFunctions::close);
+	connect(new QShortcut(QKeySequence::InsertParagraphSeparator,this),&QShortcut::activated,this,&qtDLGFunctions::OnReturnPressed);
 }
 
 qtDLGFunctions::~qtDLGFunctions()
@@ -153,7 +153,7 @@ void qtDLGFunctions::OnCustomContextMenu(QPoint qPoint)
 	if(m_selectedRow < 0) return;
 
 	menu.addAction(new QAction("Send to Disassembler",this));
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGFunctions::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }

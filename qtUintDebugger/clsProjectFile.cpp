@@ -24,12 +24,11 @@ namespace
 {
 	QFileDialog::Options ProjectDialogOptions()
 	{
-		// Native dialogs were unstable in the current Qt6/Windows release path.
-		return QFileDialog::DontUseNativeDialog;
+		return {};
 	}
 }
 
-clsProjectFile::clsProjectFile(bool isSaveFile, bool *pStartDebugging, QString projectFile) :
+clsProjectFile::clsProjectFile(bool isSaveFile, bool *pStartDebugging, QString projectFile, bool bSilent) :
 	m_pMainWindow(qtDLGUintDebugger::GetInstance())
 {
 	if(isSaveFile)
@@ -45,18 +44,21 @@ clsProjectFile::clsProjectFile(bool isSaveFile, bool *pStartDebugging, QString p
 
 			if(projectFile.length() <= 0)
 			{
-				QMessageBox::critical(m_pMainWindow, "uintDebugger", "Invalid file selected!", QMessageBox::Ok, QMessageBox::Ok);
+				if(!bSilent)
+					QMessageBox::critical(m_pMainWindow, "uintDebugger", "Invalid file selected!", QMessageBox::Ok, QMessageBox::Ok);
 				return;
 			}
 		}
 
 		if(!WriteDataToFile(projectFile))
 		{
-			QMessageBox::critical(m_pMainWindow, "uintDebugger", "Error while saving the data!", QMessageBox::Ok, QMessageBox::Ok);
+			if(!bSilent)
+				QMessageBox::critical(m_pMainWindow, "uintDebugger", "Error while saving the data!", QMessageBox::Ok, QMessageBox::Ok);
 		}
 		else
 		{
-			QMessageBox::information(m_pMainWindow, "uintDebugger", "Data has been saved!", QMessageBox::Ok, QMessageBox::Ok);
+			if(!bSilent)
+				QMessageBox::information(m_pMainWindow, "uintDebugger", "Data has been saved!", QMessageBox::Ok, QMessageBox::Ok);
 		}
 	}
 	else
@@ -72,19 +74,22 @@ clsProjectFile::clsProjectFile(bool isSaveFile, bool *pStartDebugging, QString p
 
 			if(projectFile.length() <= 0)
 			{
-				QMessageBox::critical(m_pMainWindow, "uintDebugger", "Invalid file selected!", QMessageBox::Ok, QMessageBox::Ok);
+				if(!bSilent)
+					QMessageBox::critical(m_pMainWindow, "uintDebugger", "Invalid file selected!", QMessageBox::Ok, QMessageBox::Ok);
 				return;
 			}
 		}
 
 		if(!ReadDataFromFile(projectFile))
 		{
-			QMessageBox::critical(m_pMainWindow, "uintDebugger", "Error while reading the data!", QMessageBox::Ok, QMessageBox::Ok);
+			if(!bSilent)
+				QMessageBox::critical(m_pMainWindow, "uintDebugger", "Error while reading the data!", QMessageBox::Ok, QMessageBox::Ok);
 			return;
 		}
 		else
 		{
-			QMessageBox::information(m_pMainWindow, "uintDebugger", "Data has been loaded!", QMessageBox::Ok, QMessageBox::Ok);
+			if(!bSilent)
+				QMessageBox::information(m_pMainWindow, "uintDebugger", "Data has been loaded!", QMessageBox::Ok, QMessageBox::Ok);
 		}
 
 		if(pStartDebugging != NULL)
@@ -109,6 +114,7 @@ bool clsProjectFile::WriteDataToFile(const QString &saveFilePath)
 
 	xmlWriter.writeStartDocument();
 	xmlWriter.writeStartElement("uintDebugger-DATA");
+	xmlWriter.writeAttribute("schemaVersion", QString::number(kNdbSchemaVersion));
 
 	WriteDebugDataToFile(xmlWriter);
 	WriteBookmarkDataToFile(xmlWriter);
@@ -244,6 +250,20 @@ bool clsProjectFile::ReadDataFromFile(const QString &loadFilePath)
 		{
 			if(xmlReader.name() == "uintDebugger-DATA" || xmlReader.name() == "uintDebugger_DATA")
 			{
+				// Accept: no attribute (v0 / legacy file) or schemaVersion == "1".
+				// Reject anything higher so we don't silently mis-parse a future
+				// format this build doesn't understand.
+				const auto verAttr = xmlReader.attributes().value("schemaVersion");
+				if(!verAttr.isEmpty())
+				{
+					bool ok = false;
+					const int ver = verAttr.toInt(&ok);
+					if(!ok || ver > kNdbSchemaVersion)
+					{
+						loadFile.close();
+						return false; // unsupported future schema
+					}
+				}
 				continue;
 			}
 			else if(xmlReader.name() == "TARGET")

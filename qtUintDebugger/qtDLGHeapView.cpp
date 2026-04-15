@@ -59,10 +59,10 @@ qtDLGHeapView::qtDLGHeapView(QWidget *parent, Qt::WindowFlags flags,int processI
 	this->setAttribute(Qt::WA_DeleteOnClose,true);
 	this->setLayout(verticalLayout);
 
-	connect(tblHeapBlocks,SIGNAL(customContextMenuRequested(QPoint)),this,SLOT(OnCustomContextMenuRequested(QPoint)));
-	connect(tblHeapView,SIGNAL(itemSelectionChanged()),this,SLOT(OnSelectionChanged()));
-	connect(new QShortcut(QKeySequence("F5"),this),SIGNAL(activated()),this,SLOT(DisplayHeap()));
-	connect(new QShortcut(Qt::Key_Escape,this),SIGNAL(activated()),this,SLOT(close()));
+	connect(tblHeapBlocks,&QWidget::customContextMenuRequested,this,&qtDLGHeapView::OnCustomContextMenuRequested);
+	connect(tblHeapView,&QTableWidget::itemSelectionChanged,this,&qtDLGHeapView::OnSelectionChanged);
+	connect(new QShortcut(QKeySequence("F5"),this),&QShortcut::activated,this,&qtDLGHeapView::DisplayHeap);
+	connect(new QShortcut(Qt::Key_Escape,this),&QShortcut::activated,this,&qtDLGHeapView::close);
 
 	tblHeapView->horizontalHeader()->resizeSection(0,75);
 	tblHeapView->horizontalHeader()->resizeSection(1,150);
@@ -116,7 +116,7 @@ void qtDLGHeapView::OnCustomContextMenuRequested(QPoint qPoint)
 	submenu->addAction(new QAction("Flags",this));
 
 	menu.addMenu(submenu);
-	connect(&menu,SIGNAL(triggered(QAction*)),this,SLOT(MenuCallback(QAction*)));
+	connect(&menu,&QMenu::triggered,this,&qtDLGHeapView::MenuCallback);
 
 	menu.exec(QCursor::pos());
 }

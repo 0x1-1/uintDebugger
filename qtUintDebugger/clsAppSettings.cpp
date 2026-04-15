@@ -258,16 +258,16 @@ clsAppSettings* clsAppSettings::instance = NULL;
 
 clsAppSettings* clsAppSettings::SharedInstance()
 {
-	QMutex mutex;
-
-	mutex.lock();
+	// The local mutex was a stack-allocated object — every call got a *different*
+	// mutex, so there was no mutual exclusion at all. The mutex must be static
+	// (shared across all callers) to actually protect the initialization race.
+	static QMutex mutex;
+	QMutexLocker locker(&mutex);
 
 	if (instance == NULL)
 	{
 		instance = new clsAppSettings();
 	}
-
-	mutex.unlock();
 
 	return clsAppSettings::instance;
 }
