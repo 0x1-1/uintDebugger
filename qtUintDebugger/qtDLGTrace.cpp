@@ -47,7 +47,7 @@ qtDLGTrace::qtDLGTrace(QWidget *parent, Qt::WindowFlags flags)
 	tblTraceLog->horizontalHeader()->resizeSection(3,300); //Symbol.
 	tblTraceLog->horizontalHeader()->setFixedHeight(21);
 
-	connect(m_statusBarTimer,&QTimer::timeout,this,&qtDLGTrace::OnUpdateStatusBar);
+	connect(m_statusBarTimer,&QTimer::timeout,this,&qtDLGTrace::OnStatusBarTimerTick);
 	connect(tblTraceLog,&QWidget::customContextMenuRequested,this,&qtDLGTrace::OnCustomContextMenu);
 	connect(tblTraceLog,&QTableWidget::itemDoubleClicked,this,&qtDLGTrace::OnDoubleClickFunction);
 	connect(scrollTrace,&QScrollBar::valueChanged,this,&qtDLGTrace::OnShow);
@@ -179,7 +179,7 @@ void qtDLGTrace::MenuCallback(QAction* pAction)
 		emit OnDisplayDisassembly(tblTraceLog->item(m_iSelectedRow,2)->text().toULongLong(0,16));
 }
 
-void qtDLGTrace::OnUpdateStatusBar()
+void qtDLGTrace::OnStatusBarTimerTick()
 {
 	quint64 temp = m_traceData.size();
 	m_stepsDoneInSecond =  (temp - m_prevStepsDone);

@@ -168,6 +168,8 @@ qtDLGUintDebugger::qtDLGUintDebugger(QWidget *parent, Qt::WindowFlags flags)
 	connect(actionWindow_Show_Functions, SIGNAL(triggered()), this, SLOT(action_WindowShowFunctions()));
 	connect(actionWindow_Show_Privileges, SIGNAL(triggered()), this, SLOT(action_WindowShowPrivileges()));
 	connect(actionWindow_Show_Bookmarks, SIGNAL(triggered()), this, SLOT(action_WindowShowBookmarks()));
+	connect(actionWindow_Memory_Search, SIGNAL(triggered()), this, SLOT(action_WindowMemorySearch()));
+	connect(actionWindow_AntiAntiDebug, SIGNAL(triggered()), this, SLOT(action_WindowAntiAntiDebug()));
 	connect(action_Debug_Run_to_UserCode,SIGNAL(triggered()), this, SLOT(action_DebugRunToUserCode()));
 	connect(actionDebug_Trace_Start, SIGNAL(triggered()), this, SLOT(action_DebugTraceStart()));
 	connect(actionDebug_Trace_Stop, SIGNAL(triggered()), this, SLOT(action_DebugTraceStop()));
@@ -620,9 +622,9 @@ void qtDLGUintDebugger::AutosaveSave()
 	QSettings settings(QSettings::NativeFormat, QSettings::UserScope,
 		QStringLiteral("uintDebugger"), QStringLiteral("uintDebugger"));
 	if(QFile::exists(autosavePath))
-		settings.setValue(QStringLiteral(kLastAutosavePathKey), autosavePath);
+		settings.setValue(QLatin1String(kLastAutosavePathKey), autosavePath);
 	else
-		settings.remove(QStringLiteral(kLastAutosavePathKey));
+		settings.remove(QLatin1String(kLastAutosavePathKey));
 	settings.sync();
 }
 
@@ -630,7 +632,7 @@ void qtDLGUintDebugger::AutosaveRestore()
 {
 	QSettings settings(QSettings::NativeFormat, QSettings::UserScope,
 		QStringLiteral("uintDebugger"), QStringLiteral("uintDebugger"));
-	QString autosavePath = settings.value(QStringLiteral(kLastAutosavePathKey)).toString();
+	QString autosavePath = settings.value(QLatin1String(kLastAutosavePathKey)).toString();
 
 	if(autosavePath.isEmpty())
 	{
@@ -644,7 +646,7 @@ void qtDLGUintDebugger::AutosaveRestore()
 
 	if(!QFile::exists(autosavePath))
 	{
-		settings.remove(QStringLiteral(kLastAutosavePathKey));
+		settings.remove(QLatin1String(kLastAutosavePathKey));
 		settings.sync();
 		return;
 	}
@@ -662,7 +664,7 @@ void qtDLGUintDebugger::AutosaveRestore()
 	clsProjectFile(false, &startDebugging, autosavePath, /*bSilent=*/true);
 	if(startDebugging)
 	{
-		settings.remove(QStringLiteral(kLastAutosavePathKey));
+		settings.remove(QLatin1String(kLastAutosavePathKey));
 		settings.sync();
 		action_DebugStart();
 	}

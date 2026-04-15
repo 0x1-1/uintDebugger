@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ *
+ * 	This file is part of uintDebugger.
+ *
+ *    uintDebugger is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
+ *
+ *    uintDebugger is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with uintDebugger.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ -->
+<ui version="4.0">
+ <class>qtDLGAntiAntiDebugClass</class>
+ <widget class="QWidget" name="qtDLGAntiAntiDebugClass">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>380</width>
+    <height>210</height>
+   </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="windowTitle">
+   <string>[ uintDebugger ] - Anti-Anti-Debug</string>
+  </property>
+  <widget class="QGroupBox" name="grpPatches">
+   <property name="geometry">
+    <rect>
+     <x>6</x>
+     <y>6</y>
+     <width>366</width>
+     <height>130</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Patches</string>
+   </property>
+   <widget class="QCheckBox" name="cbIsDebuggerPresent">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>20</y>
+      <width>345</width>
+      <height>17</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>IsDebuggerPresent</string>
+    </property>
+    <property name="checked">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="cbCheckRemoteDebuggerPresent">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>42</y>
+      <width>345</width>
+      <height>17</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>CheckRemoteDebuggerPresent</string>
+    </property>
+    <property name="checked">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="cbNtQueryInformationProcess">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>64</y>
+      <width>345</width>
+      <height>17</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>NtQueryInformationProcess  (ProcessDebugPort)</string>
+    </property>
+    <property name="checked">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="cbNtSetInformationThread">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>86</y>
+      <width>345</width>
+      <height>17</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>NtSetInformationThread  (ThreadHideFromDebugger)</string>
+    </property>
+    <property name="checked">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="lblPatchCount">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>110</y>
+      <width>345</width>
+      <height>14</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>0 / 4 patches applied</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QPushButton" name="btnApply">
+   <property name="geometry">
+    <rect>
+     <x>6</x>
+     <y>150</y>
+     <width>175</width>
+     <height>24</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Apply Selected</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="btnRevert">
+   <property name="geometry">
+    <rect>
+     <x>197</x>
+     <y>150</y>
+     <width>175</width>
+     <height>24</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Revert All</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="lblStatus">
+   <property name="geometry">
+    <rect>
+     <x>6</x>
+     <y>180</y>
+     <width>366</width>
+     <height>18</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>No process attached.</string>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -130,6 +130,7 @@ void clsAppSettings::SaveDebuggerSettings()
 	userSettings->setValue("SUSPENDTYPE", QString("%1").arg(m_pDebugger->dbgSettings.dwSuspendType));
 	userSettings->setValue("DefaultExceptionMode", QString("%1").arg(m_pDebugger->dbgSettings.dwDefaultExceptionMode));
 	userSettings->setValue("EntropyThreshold", m_entropyThreshold);
+	userSettings->setValue("AntiAntiDebug", m_pDebugger->dbgSettings.bEnableAntiAntiDebug);
 
 	int exceptionHCounter = 0;
 	QString exceptionString = userSettings->value(QString("EXCEPTION%1").arg(exceptionHCounter)).toString();
@@ -197,6 +198,7 @@ void clsAppSettings::LoadDebuggerSettings()
 	m_pDebugger->dbgSettings.dwSuspendType = userSettings->value("SUSPENDTYPE").toInt();
 	m_pDebugger->dbgSettings.dwDefaultExceptionMode = userSettings->value("DefaultExceptionMode").toInt();
 	m_entropyThreshold = userSettings->value("EntropyThreshold", 6.4f).toFloat();
+	m_pDebugger->dbgSettings.bEnableAntiAntiDebug = userSettings->value("AntiAntiDebug").toBool();
 
 	m_pDebugger->CustomExceptionRemoveAll();
 	int i = 0;
@@ -293,6 +295,7 @@ void clsAppSettings::WriteDefaultSettings()
 	userSettings->setValue("SUSPENDTYPE", 0);
 	userSettings->setValue("DefaultExceptionMode", 0);
 	userSettings->setValue("EntropyThreshold", 6.4f);
+	userSettings->setValue("AntiAntiDebug", false);
 	userSettings->setValue("COLOR_BP", "Red");
 	userSettings->setValue("COLOR_CALL", "Green");
 	userSettings->setValue("COLOR_JUMP", "Dark green");

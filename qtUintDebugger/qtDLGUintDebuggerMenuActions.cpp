@@ -29,6 +29,8 @@
 #include "qtDLGFunctions.h"
 #include "qtDLGProcessPrivilege.h"
 #include "qtDLGOpenNewFile.h"
+#include "qtDLGMemorySearch.h"
+#include "qtDLGAntiAntiDebug.h"
 
 #include "clsProjectFile.h"
 #include "clsHelperClass.h"
@@ -741,4 +743,32 @@ void qtDLGUintDebugger::action_WindowShowFunctions()
 void qtDLGUintDebugger::action_WindowShowBookmarks()
 {
 	dlgBookmark->show();
+}
+
+void qtDLGUintDebugger::action_WindowMemorySearch()
+{
+	if(!coreDebugger->GetDebuggingState())
+		return;
+
+	m_iMenuProcessID = -1;
+	actionWindow_Memory_Search->setDisabled(true);
+
+	GenerateMenu();
+
+	if(m_iMenuProcessID >= 0)
+	{
+		auto *dlg = new qtDLGMemorySearch(this, m_iMenuProcessID);
+		connect(dlg, &qtDLGMemorySearch::OnShowDisassembly,
+		        DisAsGUI, &qtDLGDisassembler::OnDisplayDisassembly);
+		dlg->show();
+	}
+
+	actionWindow_Memory_Search->setEnabled(true);
+	m_iMenuProcessID = -1;
+}
+
+void qtDLGUintDebugger::action_WindowAntiAntiDebug()
+{
+	auto *dlg = new qtDLGAntiAntiDebug(this, coreDebugger->GetCurrentPID());
+	dlg->show();
 }

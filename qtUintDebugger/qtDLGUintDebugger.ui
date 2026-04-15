@@ -140,6 +140,8 @@
     <addaction name="actionWindow_Detail_Information"/>
     <addaction name="actionWindow_Breakpoint_Manager"/>
     <addaction name="actionWindow_Show_Bookmarks"/>
+    <addaction name="actionWindow_Memory_Search"/>
+    <addaction name="actionWindow_AntiAntiDebug"/>
     <addaction name="separator"/>
     <addaction name="actionWindow_Show_Memory"/>
     <addaction name="actionWindow_Show_Heap"/>
@@ -431,6 +433,22 @@
   <action name="actionWindow_Show_Bookmarks">
    <property name="text">
     <string>Bookmark / Comment</string>
+   </property>
+  </action>
+  <action name="actionWindow_Memory_Search">
+   <property name="text">
+    <string>Memory Search</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+F</string>
+   </property>
+  </action>
+  <action name="actionWindow_AntiAntiDebug">
+   <property name="text">
+    <string>Anti-Anti-Debug</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Alt+A</string>
    </property>
   </action>
   <action name="actionFile_Save">

@@ -112,6 +112,9 @@ void clsDebugger::CleanWorkSpace()
 		clsMemManager::CFree(DLLs.at(i).sPath);
 	}
 
+	m_antiAntiDebug.UnpatchAll();
+	m_antiAntiDebug.reset();
+
 	m_pBreakpointManager->BreakpointCleanup();
 
 	PIDs.clear();
@@ -287,9 +290,33 @@ void clsDebugger::DebuggingLoop()
 					}						
 				}			
 				
+				// Anti-Anti-Debug: setup for the main process so the dialog
+				// can patch even when auto-apply is off.
+				if (processHandle == m_dbgPI.hProcess)
+				{
+					bool isX64 = true;
+#ifdef _AMD64_
+					BOOL isWow64 = FALSE;
+					if (clsAPIImport::pIsWow64Process)
+						clsAPIImport::pIsWow64Process(processHandle, &isWow64);
+					isX64 = (isWow64 == FALSE);
+#else
+					isX64 = false;
+#endif
+					m_antiAntiDebug.setup(processHandle, isX64);
+
+					if (dbgSettings.bEnableAntiAntiDebug)
+					{
+						if (m_antiAntiDebug.ApplyAll())
+							emit OnLog("[+] Anti-Anti-Debug: all patches applied");
+						else
+							emit OnLog("[!] Anti-Anti-Debug: one or more patches failed");
+					}
+				}
+
 				if(dbgSettings.bBreakOnNewPID)
 					dwContinueStatus = CallBreakDebugger(&debug_event,0);
-				
+
 				break;
 			}
 		case CREATE_THREAD_DEBUG_EVENT:

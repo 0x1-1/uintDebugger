@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>356</width>
-    <height>440</height>
+    <height>465</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -22,7 +22,7 @@
      <x>3</x>
      <y>3</y>
      <width>351</width>
-     <height>401</height>
+     <height>426</height>
     </rect>
    </property>
    <property name="currentIndex">
@@ -522,6 +522,25 @@
      </property>
      <property name="text">
       <string>Entropy threshold (packed warning):</string>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="cbAntiAntiDebug">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>400</y>
+       <width>200</width>
+       <height>17</height>
+      </rect>
+     </property>
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="text">
+      <string>Anti-Anti-Debug on attach</string>
      </property>
     </widget>
     <widget class="QDoubleSpinBox" name="dsbEntropyThreshold">
@@ -1348,7 +1367,7 @@
    <property name="geometry">
     <rect>
      <x>270</x>
-     <y>410</y>
+     <y>435</y>
      <width>80</width>
      <height>23</height>
     </rect>
@@ -1367,7 +1386,7 @@
    <property name="geometry">
     <rect>
      <x>90</x>
-     <y>410</y>
+     <y>435</y>
      <width>80</width>
      <height>23</height>
     </rect>
@@ -1386,7 +1405,7 @@
    <property name="geometry">
     <rect>
      <x>180</x>
-     <y>410</y>
+     <y>435</y>
      <width>80</width>
      <height>23</height>
     </rect>

@@ -66,7 +66,7 @@ private slots:
 	void OnShow(int Offset);
 	void OnCustomContextMenu(QPoint qPoint);
 	void MenuCallback(QAction* pAction);
-	void OnUpdateStatusBar();
+	void OnStatusBarTimerTick();
 	void OnDoubleClickFunction(QTableWidgetItem *pItem);
 
 protected:

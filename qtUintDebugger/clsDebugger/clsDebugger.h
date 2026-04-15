@@ -24,6 +24,7 @@
 
 #include "../clsBreakpointManager.h"
 #include "../clsPEManager.h"
+#include "../clsAntiAntiDebug.h"
 
 #define LOGBUFFER (512 * sizeof(TCHAR))
 #define LOGBUFFERCHAR (512)
@@ -57,6 +58,7 @@ struct clsDebuggerSettings
 	bool bAutoLoadSymbols;
 	bool bUseExceptionAssist;
 	bool bUseMSSymbols;
+	bool bEnableAntiAntiDebug;
 };
 
 struct DLLStruct
@@ -155,6 +157,9 @@ public:
 	// Settings lock: take before reading or writing dbgSettings from any thread.
 	QReadWriteLock m_settingsLock;
 	clsDebuggerSettings dbgSettings;
+
+	// Anti-Anti-Debug patcher (set up after CREATE_PROCESS_DEBUG_EVENT).
+	clsAntiAntiDebug m_antiAntiDebug;
 
 	clsDebugger();
 	~clsDebugger();

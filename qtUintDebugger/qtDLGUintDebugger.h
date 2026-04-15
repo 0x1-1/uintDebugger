@@ -127,6 +127,8 @@ private slots:
 	void action_WindowShowFunctions();
 	void action_WindowShowPrivileges();
 	void action_WindowShowBookmarks();
+	void action_WindowMemorySearch();
+	void action_WindowAntiAntiDebug();
 	void action_DebugTraceStart();
 	void action_DebugTraceStop();
 	void action_DebugTraceShow();

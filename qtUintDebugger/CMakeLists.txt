@@ -22,6 +22,7 @@ set(SOURCES
     clsDebugger/clsDebuggerPublicAPI.cpp
 
     # Core engine
+    clsAntiAntiDebug.cpp
     clsAPIImport.cpp
     clsAppSettings.cpp
     clsBreakpointHardware.cpp
@@ -85,6 +86,8 @@ set(SOURCES
     qtDLGTrace.cpp
     qtDLGWindowView.cpp
     qtDLGWatch.cpp
+    qtDLGMemorySearch.cpp
+    qtDLGAntiAntiDebug.cpp
 
     # Updater UI (compiled into main app)
     ../uintDebuggerUpdater/UpdaterWidget/ucheckupdateswidget.cpp
@@ -96,9 +99,12 @@ set(SOURCES
     ../uintDebuggerUpdater/UpdaterWidget/uupdatewidget.cpp
 
     # Headers with Q_OBJECT (needed for AUTOMOC)
+    clsAntiAntiDebug.h
+    qtDLGAntiAntiDebug.h
     uiHelpers.h
     clsExpressionEvaluator.h
     qtDLGWatch.h
+    qtDLGMemorySearch.h
     clsDebugger/clsDebugger.h
     clsAPIImport.h
     clsAppSettings.h

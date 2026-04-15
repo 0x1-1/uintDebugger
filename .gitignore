@@ -35,3 +35,5 @@ update_tmp.exe
 *_crash.txt
 uintDebugger_qt.log
 cdb_*.log
+*.md
+*claude

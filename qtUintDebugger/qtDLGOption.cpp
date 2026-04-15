@@ -204,6 +204,11 @@ void qtDLGOption::OnSave()
 	else
 		m_pMainWindow->coreDebugger->dbgSettings.bBreakOnExPID = false;
 
+	if(cbAntiAntiDebug->isChecked())
+		m_pMainWindow->coreDebugger->dbgSettings.bEnableAntiAntiDebug = true;
+	else
+		m_pMainWindow->coreDebugger->dbgSettings.bEnableAntiAntiDebug = false;
+
 	m_pMainWindow->coreDebugger->CustomExceptionRemoveAll();
 	for(int i = 0; i < tblCustomExceptions->rowCount(); i++)
 	{	
@@ -318,6 +323,11 @@ void qtDLGOption::OnLoad()
 		cbExceptionAssist->setChecked(true);
 	else
 		cbExceptionAssist->setChecked(false);
+
+	if(m_pMainWindow->coreDebugger->dbgSettings.bEnableAntiAntiDebug)
+		cbAntiAntiDebug->setChecked(true);
+	else
+		cbAntiAntiDebug->setChecked(false);
 
 	tblCustomExceptions->setRowCount(0);
 	for(int i = 0; i < m_pMainWindow->coreDebugger->ExceptionHandler.size(); i++)
