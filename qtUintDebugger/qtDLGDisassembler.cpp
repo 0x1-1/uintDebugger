@@ -202,9 +202,9 @@ void qtDLGDisassembler::OnDisplayDisassembly(quint64 dwEIP)
 		QString ModName,FuncName;
 		clsHelperClass::LoadSymbolForAddr(FuncName,ModName,dwEIP,coreDebugger->GetCurrentProcessHandle());
 		if(ModName.length() > 0 && FuncName.length() > 0)
-			qtDLGUintDebugger::GetInstance()->setWindowTitle(QStringLiteral("[" UINTDEBUGGER_DISPLAY_NAME " v " UINTDEBUGGER_VERSION_STRING " - PID: %1 - TID: %2] - %3.%4").arg(processID,6,16,QChar('0')).arg(clsDebugger::GetCurrentTID(),6,16,QChar('0')).arg(ModName).arg(FuncName));
+			qtDLGUintDebugger::GetInstance()->setWindowTitle(QStringLiteral("[" UINTDEBUGGER_DISPLAY_NAME " v " UINTDEBUGGER_VERSION_DISPLAY_STRING " - PID: %1 - TID: %2] - %3.%4").arg(processID,6,16,QChar('0')).arg(clsDebugger::GetCurrentTID(),6,16,QChar('0')).arg(ModName).arg(FuncName));
 		else if(ModName.length() > 0 && FuncName.length() <= 0)
-			qtDLGUintDebugger::GetInstance()->setWindowTitle(QStringLiteral("[" UINTDEBUGGER_DISPLAY_NAME " v " UINTDEBUGGER_VERSION_STRING " - PID: %1 - TID: %2] - %3.%4").arg(processID,6,16,QChar('0')).arg(clsDebugger::GetCurrentTID(),6,16,QChar('0')).arg(ModName).arg(dwEIP,16,16,QChar('0')));
+			qtDLGUintDebugger::GetInstance()->setWindowTitle(QStringLiteral("[" UINTDEBUGGER_DISPLAY_NAME " v " UINTDEBUGGER_VERSION_DISPLAY_STRING " - PID: %1 - TID: %2] - %3.%4").arg(processID,6,16,QChar('0')).arg(clsDebugger::GetCurrentTID(),6,16,QChar('0')).arg(ModName).arg(dwEIP,16,16,QChar('0')));
 
 		tblDisAs->setUpdatesEnabled(true);
 	}

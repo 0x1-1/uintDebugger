@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 
 	QApplication a(argc, argv);
 	a.setApplicationName(QStringLiteral(UINTDEBUGGER_DISPLAY_NAME));
-	a.setApplicationVersion(QStringLiteral(UINTDEBUGGER_VERSION_STRING));
+	a.setApplicationVersion(QStringLiteral(UINTDEBUGGER_VERSION_DISPLAY_STRING));
 	qInstallMessageHandler(QtMessageToFile);
 	qtDLGUintDebugger w;
 	w.show();

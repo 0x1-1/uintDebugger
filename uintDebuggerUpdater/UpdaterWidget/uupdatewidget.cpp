@@ -115,7 +115,7 @@ void UUpdateWidget::ScheduleStartupUpdateCheck(QWidget *parent)
             updatePrompt.setIcon(QMessageBox::Information);
             updatePrompt.setText(QStringLiteral("A new version of %1 is available.").arg(QStringLiteral(UINTDEBUGGER_DISPLAY_NAME)));
             updatePrompt.setInformativeText(QStringLiteral("Current version: %1\nAvailable version: %2\n\nOpen the updater now?")
-                .arg(QStringLiteral(UINTDEBUGGER_VERSION_STRING))
+                .arg(QStringLiteral(UINTDEBUGGER_VERSION_DISPLAY_STRING))
                 .arg(release.versionString));
             updatePrompt.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
             updatePrompt.setDefaultButton(QMessageBox::Yes);
@@ -363,4 +363,3 @@ QString UUpdateWidget::updatesRootDir() const
 {
     return QDir(applicationRootDir()).filePath(QStringLiteral("updates"));
 }
-

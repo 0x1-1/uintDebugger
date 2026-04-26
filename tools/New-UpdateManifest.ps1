@@ -1,9 +1,10 @@
 param(
     [string]$ReleaseDir = ".\Release",
     [string]$Version = "",
-    [string]$Owner = "uintptr",
+    [string]$Owner = "0x1-1",
     [string]$Repository = "uintDebugger",
     [string]$Tag = "",
+    [string]$Commit = "",
     [string]$ManifestAssetName = "uintDebugger-update-manifest.json"
 )
 
@@ -30,6 +31,36 @@ function Get-AssetName {
     }
 
     return $RelativePath
+}
+
+function Get-GitCommit {
+    param([string]$RepoRoot)
+
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        return "unknown"
+    }
+
+    $commit = (& git -C $RepoRoot rev-parse --short=12 HEAD 2>$null)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($commit)) {
+        return "unknown"
+    }
+
+    $dirty = $false
+    & git -C $RepoRoot diff --quiet 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        $dirty = $true
+    }
+
+    & git -C $RepoRoot diff --cached --quiet 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        $dirty = $true
+    }
+
+    if ($dirty) {
+        return "$commit-dirty"
+    }
+
+    return $commit.Trim()
 }
 
 function Get-RelativeUnixPath {
@@ -86,6 +117,10 @@ if ([string]::IsNullOrWhiteSpace($Tag)) {
     $Tag = "v$Version"
 }
 
+if ([string]::IsNullOrWhiteSpace($Commit)) {
+    $Commit = Get-GitCommit -RepoRoot $repoRoot
+}
+
 $stagingDir = Join-Path $resolvedReleaseDir "github-release-assets"
 if (Test-Path $stagingDir) {
     Remove-Item -LiteralPath $stagingDir -Recurse -Force
@@ -115,6 +150,8 @@ foreach ($file in $releaseFiles) {
 $manifestObject = [ordered]@{
     schema     = 1
     version    = $Version
+    build      = "$Version+$Commit"
+    commit     = $Commit
     tag        = $Tag
     owner      = $Owner
     repository = $Repository
@@ -128,13 +165,15 @@ $uploadScriptPath = Join-Path $stagingDir "upload-release-assets.ps1"
 $uploadCommands = @(
     '$ErrorActionPreference = "Stop"',
     ('$tag = "{0}"' -f $Tag.Trim()),
+    ('$repo = "{0}/{1}"' -f $Owner.Trim(), $Repository.Trim()),
     '$assetDir = Split-Path -Parent $MyInvocation.MyCommand.Path',
     'Get-ChildItem -LiteralPath $assetDir -File | Where-Object { $_.Name -ne "upload-release-assets.ps1" } | ForEach-Object {',
-    '    gh release upload $tag $_.FullName --clobber',
+    '    gh release upload $tag $_.FullName --repo $repo --clobber',
     '}'
 )
 $uploadCommands | Set-Content -LiteralPath $uploadScriptPath -Encoding utf8
 
 Write-Host "Generated manifest staging folder: $stagingDir"
 Write-Host "Manifest asset: $manifestPath"
+Write-Host "Build: $Version+$Commit"
 Write-Host "Upload helper: $uploadScriptPath"

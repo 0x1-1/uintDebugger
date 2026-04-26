@@ -34,6 +34,9 @@ jobs:
       - name: Run Tests
         run: ctest --test-dir Build --build-config Release --output-on-failure
 
+      - name: Verify portable layout
+        run: powershell -ExecutionPolicy Bypass -File .\tools\Test-ReleaseLayout.ps1 -ReleaseDir .\Release
+
       - name: Generate Update Manifest
         run: powershell -ExecutionPolicy Bypass -File .\tools\New-UpdateManifest.ps1 -ReleaseDir .\Release -Tag "${{ github.ref_name }}"
 

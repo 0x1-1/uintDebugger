@@ -1,24 +1,22 @@
 /*
  * test_updater_paths.cpp
  *
- * Standalone test for UpdaterSafety::IsPathSafe and IsSourceRegularFile.
- * No Qt, no external dependencies — just Windows + std::filesystem.
- *
- * Returns 0 on success, 1 on any failure (compatible with CTest).
+ * Standalone smoke tests for updater path validation and file apply/rollback.
+ * No Qt dependency; compatible with CTest.
  */
 #include <windows.h>
+
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
-#include <filesystem>
 
 #include "../uintDebuggerUpdater/PathSafety.h"
+#include "../uintDebuggerUpdater/UpdaterApply.h"
 
 namespace fs = std::filesystem;
 
-// ---------------------------------------------------------------------------
-// Minimal test harness
-// ---------------------------------------------------------------------------
 static int g_failures = 0;
 
 #define CHECK(expr) \
@@ -29,49 +27,72 @@ static int g_failures = 0;
         } \
     } while(0)
 
-// ---------------------------------------------------------------------------
-// IsPathSafe tests
-// ---------------------------------------------------------------------------
-static void TestIsPathSafe()
+static fs::path UniqueTempDir(const wchar_t *name)
 {
-    const fs::path root = L"C:\\FakeAppRoot";
-
-    // --- Must accept clean relative paths ---
-    CHECK(UpdaterSafety::IsPathSafe(L"uintDebugger.exe",            root));
-    CHECK(UpdaterSafety::IsPathSafe(L"platforms/qwindows.dll",      root));
-    CHECK(UpdaterSafety::IsPathSafe(L"plugins/styles/qfusion.dll",  root));
-    CHECK(UpdaterSafety::IsPathSafe(L"updater.exe",                 root));
-
-    // --- Must reject empty path ---
-    CHECK(!UpdaterSafety::IsPathSafe(L"",                           root));
-
-    // --- Must reject absolute paths ---
-    CHECK(!UpdaterSafety::IsPathSafe(L"C:\\Windows\\evil.dll",      root));
-    CHECK(!UpdaterSafety::IsPathSafe(L"\\evil.dll",                 root));
-
-    // --- Must reject any ".." component ---
-    CHECK(!UpdaterSafety::IsPathSafe(L"..",                         root));
-    CHECK(!UpdaterSafety::IsPathSafe(L"../evil.dll",                root));
-    CHECK(!UpdaterSafety::IsPathSafe(L"../../Windows/evil.dll",     root));
-    CHECK(!UpdaterSafety::IsPathSafe(L"sub/../../../evil.dll",      root));
-    CHECK(!UpdaterSafety::IsPathSafe(L"a/b/../../..",               root));
-
-    // --- Must reject paths with embedded ".." that survive lexically_normal ---
-    // lexically_normal("a/../../b") => "../b"  (leading ".." preserved)
-    fs::path tricky = fs::path(L"a/../../b").lexically_normal();
-    CHECK(!UpdaterSafety::IsPathSafe(tricky, root));
+    wchar_t tempRoot[MAX_PATH] = {};
+    GetTempPathW(MAX_PATH, tempRoot);
+    return fs::path(tempRoot) / (std::wstring(name) + L"_" + std::to_wstring(GetCurrentProcessId()));
 }
 
-// ---------------------------------------------------------------------------
-// IsSourceRegularFile tests — uses real temp files on disk
-// ---------------------------------------------------------------------------
+static void WriteText(const fs::path &path, const std::string &text)
+{
+    fs::create_directories(path.parent_path());
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    file << text;
+}
+
+static std::string ReadText(const fs::path &path)
+{
+    std::ifstream file(path, std::ios::binary);
+    return std::string(
+        std::istreambuf_iterator<char>(file),
+        std::istreambuf_iterator<char>());
+}
+
+static void TestIsPathSafe()
+{
+    const fs::path root = UniqueTempDir(L"uintDebuggerPathRoot");
+    std::error_code ec;
+    fs::create_directories(root, ec);
+
+    CHECK(UpdaterSafety::IsPathSafe(L"uintDebugger.exe", root));
+    CHECK(UpdaterSafety::IsPathSafe(L"platforms/qwindows.dll", root));
+    CHECK(UpdaterSafety::IsPathSafe(L"plugins/styles/qfusion.dll", root));
+    CHECK(UpdaterSafety::IsPathSafe(L"updater.exe", root));
+
+    CHECK(!UpdaterSafety::IsPathSafe(L"", root));
+    CHECK(!UpdaterSafety::IsPathSafe(L"C:\\Windows\\evil.dll", root));
+    CHECK(!UpdaterSafety::IsPathSafe(L"\\evil.dll", root));
+
+    CHECK(!UpdaterSafety::IsPathSafe(L"..", root));
+    CHECK(!UpdaterSafety::IsPathSafe(L"../evil.dll", root));
+    CHECK(!UpdaterSafety::IsPathSafe(L"../../Windows/evil.dll", root));
+    CHECK(!UpdaterSafety::IsPathSafe(L"sub/../../../evil.dll", root));
+    CHECK(!UpdaterSafety::IsPathSafe(L"a/b/../../..", root));
+
+    const fs::path tricky = fs::path(L"a/../../b").lexically_normal();
+    CHECK(!UpdaterSafety::IsPathSafe(tricky, root));
+
+    fs::remove_all(root, ec);
+}
+
+static void TestReservedUpdaterPaths()
+{
+    CHECK(UpdaterApply::ContainsUpdaterFile(std::vector<std::wstring>{L"updater.exe"}));
+    CHECK(UpdaterApply::ContainsUpdaterFile(std::vector<std::wstring>{L"tools/Updater.EXE"}));
+
+    CHECK(UpdaterApply::IsReservedUpdaterPath(L"update_tmp.exe"));
+    CHECK(UpdaterApply::IsReservedUpdaterPath(L"Update_Tmp.EXE"));
+    CHECK(UpdaterApply::IsReservedUpdaterPath(L"update_backup/file.bin"));
+    CHECK(UpdaterApply::IsReservedUpdaterPath(L"UPDATE_BACKUP/file.bin"));
+    CHECK(!UpdaterApply::IsReservedUpdaterPath(L"uintDebugger.exe"));
+}
+
 static void TestIsSourceRegularFile()
 {
-    // Create a temporary directory for test artefacts.
-    wchar_t tmpDir[MAX_PATH] = {};
-    GetTempPathW(MAX_PATH, tmpDir);
-    fs::path testDir = fs::path(tmpDir) / L"uintDebuggerPathTest";
+    const fs::path testDir = UniqueTempDir(L"uintDebuggerSourceTest");
     std::error_code ec;
+    fs::remove_all(testDir, ec);
     fs::create_directories(testDir, ec);
     if(ec)
     {
@@ -79,33 +100,22 @@ static void TestIsSourceRegularFile()
         return;
     }
 
-    // Regular file — should be accepted.
     const fs::path regularFile = testDir / L"regular.bin";
-    {
-        HANDLE h = CreateFileW(regularFile.c_str(), GENERIC_WRITE, 0, nullptr,
-            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if(h != INVALID_HANDLE_VALUE)
-        {
-            DWORD written = 0;
-            WriteFile(h, "test", 4, &written, nullptr);
-            CloseHandle(h);
-        }
-    }
+    WriteText(regularFile, "test");
     CHECK(UpdaterSafety::IsSourceRegularFile(regularFile));
 
-    // Directory — should be rejected.
     const fs::path subDir = testDir / L"subdir";
     fs::create_directory(subDir, ec);
     CHECK(!UpdaterSafety::IsSourceRegularFile(subDir));
 
-    // Non-existent path — should be rejected.
     CHECK(!UpdaterSafety::IsSourceRegularFile(testDir / L"nonexistent.dll"));
 
-    // Symlink — should be rejected (if CreateSymbolicLinkW is available/privileged).
     const fs::path symlinkPath = testDir / L"link.dll";
-    fs::remove(symlinkPath, ec); // clean up any leftover
-    BOOL symlinkCreated = CreateSymbolicLinkW(
-        symlinkPath.c_str(), regularFile.c_str(), 0);
+    fs::remove(symlinkPath, ec);
+    const BOOL symlinkCreated = CreateSymbolicLinkW(
+        symlinkPath.c_str(),
+        regularFile.c_str(),
+        0);
     if(symlinkCreated)
     {
         CHECK(!UpdaterSafety::IsSourceRegularFile(symlinkPath));
@@ -116,21 +126,98 @@ static void TestIsSourceRegularFile()
         std::fprintf(stderr, "NOTE: symlink test skipped (requires SeCreateSymbolicLinkPrivilege)\n");
     }
 
-    // Cleanup.
     fs::remove_all(testDir, ec);
 }
 
-// ---------------------------------------------------------------------------
+static void TestApplyUpdateFilesSuccess()
+{
+    const fs::path appDir = UniqueTempDir(L"uintDebuggerApplySuccess");
+    const fs::path updatesDir = appDir / L"updates";
+    std::error_code ec;
+    fs::remove_all(appDir, ec);
+
+    WriteText(appDir / L"existing.txt", "old");
+    WriteText(updatesDir / L"existing.txt", "new");
+    WriteText(updatesDir / L"nested/new.txt", "created");
+
+    std::wstring error;
+    const bool ok = UpdaterApply::ApplyUpdateFiles(
+        appDir,
+        updatesDir,
+        std::vector<std::wstring>{L"existing.txt", L"nested/new.txt"},
+        &error);
+
+    CHECK(ok);
+    CHECK(error.empty());
+    CHECK(ReadText(appDir / L"existing.txt") == "new");
+    CHECK(ReadText(appDir / L"nested/new.txt") == "created");
+    CHECK(!fs::exists(UpdaterApply::BackupDirectory(appDir)));
+
+    fs::remove_all(appDir, ec);
+}
+
+static void TestApplyUpdateFilesRejectsMissingBeforeTouch()
+{
+    const fs::path appDir = UniqueTempDir(L"uintDebuggerApplyMissing");
+    const fs::path updatesDir = appDir / L"updates";
+    std::error_code ec;
+    fs::remove_all(appDir, ec);
+
+    WriteText(appDir / L"existing.txt", "old");
+    WriteText(updatesDir / L"existing.txt", "new");
+
+    std::wstring error;
+    const bool ok = UpdaterApply::ApplyUpdateFiles(
+        appDir,
+        updatesDir,
+        std::vector<std::wstring>{L"existing.txt", L"missing.txt"},
+        &error);
+
+    CHECK(!ok);
+    CHECK(error.find(L"Missing update file") != std::wstring::npos);
+    CHECK(ReadText(appDir / L"existing.txt") == "old");
+
+    fs::remove_all(appDir, ec);
+}
+
+static void TestRollbackAppliedFiles()
+{
+    const fs::path appDir = UniqueTempDir(L"uintDebuggerRollback");
+    const fs::path backupDir = UpdaterApply::BackupDirectory(appDir);
+    std::error_code ec;
+    fs::remove_all(appDir, ec);
+
+    WriteText(appDir / L"existing.txt", "new");
+    WriteText(backupDir / L"existing.txt", "old");
+    WriteText(appDir / L"created.txt", "created");
+
+    const bool ok = UpdaterApply::RollbackAppliedFiles(
+        appDir,
+        std::vector<fs::path>{L"existing.txt", L"created.txt"});
+
+    CHECK(ok);
+    CHECK(ReadText(appDir / L"existing.txt") == "old");
+    CHECK(!fs::exists(appDir / L"created.txt"));
+    CHECK(!fs::exists(backupDir));
+
+    fs::remove_all(appDir, ec);
+}
+
 int wmain()
 {
     TestIsPathSafe();
+    TestReservedUpdaterPaths();
     TestIsSourceRegularFile();
+    TestApplyUpdateFilesSuccess();
+    TestApplyUpdateFilesRejectsMissingBeforeTouch();
+    TestRollbackAppliedFiles();
 
     if(g_failures == 0)
     {
-        std::printf("OK — all updater path tests passed.\n");
+        std::printf("OK - all updater tests passed.\n");
         return 0;
     }
+
     std::fprintf(stderr, "%d test(s) FAILED.\n", g_failures);
     return 1;
 }

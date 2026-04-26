@@ -27,7 +27,33 @@ That value feeds:
 - startup update comparison
 - release manifest generation
 
+The build also embeds the current git commit as build metadata, for example
+`0.2.0+a286d55cd9a6`. The updater still compares only the semantic version
+part, so commit metadata does not break update detection.
+
 ## 2. Build The Release
+
+Preferred automated local flow:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\Invoke-UintDebuggerRelease.ps1
+```
+
+This configures CMake, builds `Release`, runs CTest, verifies the portable layout,
+and generates `Release/github-release-assets/`.
+
+To publish the current committed version through GitHub Actions:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\Invoke-UintDebuggerRelease.ps1 -Publish
+```
+
+The publish mode refuses a dirty working tree by default so the generated build
+can be traced back to the commit embedded in the application version. It pushes
+the current HEAD and tag; the release workflow then builds, tests, generates the
+manifest, and uploads the release assets.
+
+Manual build flow:
 
 ```powershell
 cmake -B Build -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="C:/Qt/6.10.2/msvc2022_64"

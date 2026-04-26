@@ -4,10 +4,42 @@ project(uintDebugger VERSION 0.2.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(UINTDEBUGGER_GITHUB_OWNER "uintptr")
+set(UINTDEBUGGER_GITHUB_OWNER "0x1-1")
 set(UINTDEBUGGER_GITHUB_REPOSITORY "uintDebugger")
 set(UINTDEBUGGER_UPDATE_MANIFEST_ASSET "uintDebugger-update-manifest.json")
 set(UINTDEBUGGER_UPDATE_USER_AGENT "uintDebugger-updater")
+
+set(UINTDEBUGGER_GIT_COMMIT_HASH "unknown")
+find_package(Git QUIET)
+if(Git_FOUND)
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" rev-parse --short=12 HEAD
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE UINTDEBUGGER_GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" diff --quiet
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        RESULT_VARIABLE UINTDEBUGGER_WORKTREE_DIRTY
+        ERROR_QUIET
+    )
+
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" diff --cached --quiet
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        RESULT_VARIABLE UINTDEBUGGER_INDEX_DIRTY
+        ERROR_QUIET
+    )
+
+    if(NOT UINTDEBUGGER_WORKTREE_DIRTY EQUAL 0 OR NOT UINTDEBUGGER_INDEX_DIRTY EQUAL 0)
+        string(APPEND UINTDEBUGGER_GIT_COMMIT_HASH "-dirty")
+    endif()
+endif()
+
+set(UINTDEBUGGER_VERSION_DISPLAY_STRING "${PROJECT_VERSION}+${UINTDEBUGGER_GIT_COMMIT_HASH}")
 
 if(NOT WIN32)
     message(FATAL_ERROR "uintDebugger only supports Windows")
@@ -15,6 +47,7 @@ endif()
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Network)
 qt_standard_project_setup()
+enable_testing()
 
 function(uintdebugger_configure_output_dirs target_name)
     set_target_properties(${target_name} PROPERTIES

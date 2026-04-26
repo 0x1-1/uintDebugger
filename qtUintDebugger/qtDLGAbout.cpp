@@ -27,10 +27,11 @@ qtDLGAbout::qtDLGAbout(QWidget *parent, Qt::WindowFlags flags)
 	setStyleSheet(clsHelperClass::LoadStyleSheet());
 	connect(ui.buttonBox, &QDialogButtonBox::accepted, this, &qtDLGAbout::accept);
 
-	ui.versionChip->setText(QStringLiteral("v" UINTDEBUGGER_VERSION_STRING));
+	ui.versionChip->setText(QStringLiteral("v" UINTDEBUGGER_VERSION_DISPLAY_STRING));
 	ui.aboutBuildInfo->setText(
 		QStringLiteral(
-			"<b>Version</b><br/>" UINTDEBUGGER_VERSION_STRING
+			"<b>Version</b><br/>" UINTDEBUGGER_VERSION_DISPLAY_STRING
+			"<br/><br/><b>Commit</b><br/>" UINTDEBUGGER_GIT_COMMIT_HASH
 			"<br/><br/><b>Stack</b><br/>C++17, Qt 6.10.2, CMake, MSVC 2022"
 			"<br/><br/><b>Targets</b><br/>x64, x86, WOW64"
 			"<br/><br/><b>Maintainer</b><br/>" UINTDEBUGGER_MAINTAINER

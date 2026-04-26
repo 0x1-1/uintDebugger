@@ -54,7 +54,7 @@ constexpr auto kLastAutosavePathKey = "lastAutosavePath";
 
 QString MainWindowTitle()
 {
-	return QStringLiteral("[" UINTDEBUGGER_DISPLAY_NAME " v " UINTDEBUGGER_VERSION_STRING "]");
+	return QStringLiteral("[" UINTDEBUGGER_DISPLAY_NAME " v " UINTDEBUGGER_VERSION_DISPLAY_STRING "]");
 }
 }
 
