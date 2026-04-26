@@ -19,9 +19,31 @@
 
 #include "qtDLGUintDebugger.h"
 
+#include <QGuiApplication>
+#include <QScreen>
+
 namespace
 {
 constexpr int kWindowStateVersion = 2;
+
+bool IsWindowGeometryVisible(const QMainWindow *window)
+{
+	const QRect windowRect = window->frameGeometry().isValid()
+		? window->frameGeometry()
+		: window->geometry();
+
+	if(!windowRect.isValid() || windowRect.width() < 100 || windowRect.height() < 100)
+		return false;
+
+	const QList<QScreen*> screens = QGuiApplication::screens();
+	for(QScreen *screen : screens)
+	{
+		if(screen != nullptr && screen->availableGeometry().intersects(windowRect))
+			return true;
+	}
+
+	return false;
+}
 }
 
 clsAppSettings::clsAppSettings()
@@ -86,7 +108,10 @@ bool clsAppSettings::RestoreWindowState(QMainWindow* window)
 		const QByteArray geometry = userSettings->value("mainWindowGeometry").toByteArray();
 		const QByteArray state = userSettings->value("mainWindowState").toByteArray();
 		if(!geometry.isEmpty() && !state.isEmpty())
-			result = window->restoreGeometry(geometry) && window->restoreState(state);
+			result = window->restoreGeometry(geometry) && window->restoreState(state) && IsWindowGeometryVisible(window);
+
+		if(result && window->windowState().testFlag(Qt::WindowMinimized))
+			window->setWindowState(window->windowState() & ~Qt::WindowMinimized);
 	}
 
 	if(!result)

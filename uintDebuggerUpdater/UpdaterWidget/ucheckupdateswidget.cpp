@@ -27,6 +27,7 @@
 #include <QCryptographicHash>
 #include <QFile>
 #include "ufiledownloader.h"
+#include "uqtpathsafety.h"
 #include "uupdatesmodel.h"
 
 namespace
@@ -105,11 +106,7 @@ bool IsPathSafe(const QString &relativePath, const QString &rootDir)
             return false;
     }
 
-    // Final check: resolve and confirm the path is still under rootDir.
-    const QString resolved = QDir(rootDir).absoluteFilePath(relativePath);
-    const QString canonicalRoot = QDir(rootDir).canonicalPath();
-    return resolved.startsWith(canonicalRoot + QDir::separator()) ||
-           resolved == canonicalRoot;
+    return UpdaterQtSafety::IsPathSafeForRoot(relativePath, rootDir);
 }
 
 bool ParseManifestFile(const QString &manifestPath, QList<UManifestEntry> *entries, QString *errorMessage)

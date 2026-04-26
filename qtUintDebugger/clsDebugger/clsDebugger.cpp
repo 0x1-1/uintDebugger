@@ -26,6 +26,8 @@
 #include "dbghelp.h"
 
 #include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <Psapi.h>
 #include <TlHelp32.h>
 #include <string>
@@ -43,6 +45,43 @@ inline void CloseHandleIfValid(HANDLE &handle)
 		CloseHandle(handle);
 		handle = NULL;
 	}
+}
+
+QString FormatWin32Error(DWORD errorCode)
+{
+	LPWSTR messageBuffer = nullptr;
+	const DWORD flags = FORMAT_MESSAGE_ALLOCATE_BUFFER |
+		FORMAT_MESSAGE_FROM_SYSTEM |
+		FORMAT_MESSAGE_IGNORE_INSERTS;
+
+	const DWORD length = FormatMessageW(flags,
+		nullptr,
+		errorCode,
+		0,
+		reinterpret_cast<LPWSTR>(&messageBuffer),
+		0,
+		nullptr);
+
+	QString message = (length > 0 && messageBuffer != nullptr)
+		? QString::fromWCharArray(messageBuffer).trimmed()
+		: QStringLiteral("Unknown Win32 error");
+
+	if(messageBuffer != nullptr)
+		LocalFree(messageBuffer);
+
+	return QStringLiteral("%1 (0x%2)")
+		.arg(message)
+		.arg(errorCode, 8, 16, QChar('0'));
+}
+
+std::wstring QuoteProcessImagePath(const std::wstring &path)
+{
+	std::wstring quoted;
+	quoted.reserve(path.size() + 2);
+	quoted.push_back(L'"');
+	quoted.append(path);
+	quoted.push_back(L'"');
+	return quoted;
 }
 }
 
@@ -167,7 +206,15 @@ void clsDebugger::run()
 
 void clsDebugger::AttachedDebugging()
 {
-	if(CheckProcessState(m_attachPID) && DebugActiveProcess(m_attachPID))
+	if(!CheckProcessState(m_attachPID))
+	{
+		emit OnLog(QString("[!] Attach failed: PID %1 is not running").arg(m_attachPID));
+		m_isDebugging = false;
+		emit OnDebuggerTerminated();
+		return;
+	}
+
+	if(DebugActiveProcess(m_attachPID))
 	{
 		emit OnLog("[+] Attached to Process");
 
@@ -176,28 +223,53 @@ void clsDebugger::AttachedDebugging()
 		return;
 	}
 
+	const DWORD errorCode = GetLastError();
+	emit OnLog(QString("[!] DebugActiveProcess failed for PID %1: %2")
+		.arg(m_attachPID)
+		.arg(FormatWin32Error(errorCode)));
 	m_isDebugging = false;
 	emit OnDebuggerTerminated();
 }
 
 void clsDebugger::NormalDebugging()
 {
-	DWORD dwCreationFlag = 0x2;
+	DWORD dwCreationFlag = DEBUG_ONLY_THIS_PROCESS;
 
 	if(dbgSettings.bDebugChilds == true)
-		dwCreationFlag = 0x1;
+		dwCreationFlag = DEBUG_PROCESS;
 
-	// Store wstrings in named locals so the data pointers remain valid for the
-	// duration of the CreateProcess call. The command-line buffer must be mutable
-	// (LPWSTR), so pass .data() — never cast a const c_str() pointer.
-	std::wstring targetFile  = m_targetFile.toStdWString();
-	std::wstring commandLine = m_commandLine.toStdWString();
+	// Build a mutable command line that includes argv[0], and launch from the
+	// target directory so relative DLL/config loads match normal execution.
+	const QFileInfo targetInfo(m_targetFile);
+	if(!targetInfo.exists() || !targetInfo.isFile())
+	{
+		emit OnLog(QString("[!] Target file does not exist: %1").arg(m_targetFile));
+		m_isDebugging = false;
+		emit OnDebuggerTerminated();
+		return;
+	}
 
-	if(CreateProcess(targetFile.c_str(), commandLine.empty() ? nullptr : commandLine.data(),
-		NULL, NULL, false, dwCreationFlag, NULL, NULL, &_si, &_pi))
+	std::wstring targetFile = QDir::toNativeSeparators(targetInfo.absoluteFilePath()).toStdWString();
+	std::wstring commandLine = QuoteProcessImagePath(targetFile);
+	const std::wstring arguments = m_commandLine.toStdWString();
+	if(!arguments.empty())
+	{
+		commandLine.push_back(L' ');
+		commandLine.append(arguments);
+	}
+	const std::wstring workingDirectory = QDir::toNativeSeparators(targetInfo.absolutePath()).toStdWString();
+
+	emit OnLog(QString("[+] Launching target: %1").arg(QString::fromStdWString(targetFile)));
+
+	if(CreateProcessW(targetFile.c_str(), commandLine.data(),
+		NULL, NULL, false, dwCreationFlag, NULL, workingDirectory.c_str(), &_si, &_pi))
 		DebuggingLoop();
 	else
 	{
+		const DWORD errorCode = GetLastError();
+		emit OnLog(QString("[!] CreateProcess failed for %1: %2")
+			.arg(QString::fromStdWString(targetFile))
+			.arg(FormatWin32Error(errorCode)));
 		m_isDebugging = false;
 		emit OnDebuggerTerminated();
 	}
@@ -225,7 +297,13 @@ void clsDebugger::DebuggingLoop()
 	while(bContinueDebugging && m_isDebugging)
 	{ 
 		if (!WaitForDebugEvent(&debug_event, INFINITE))
+		{
+			const DWORD errorCode = GetLastError();
+			emit OnLog(QString("[!] WaitForDebugEvent failed: %1")
+				.arg(FormatWin32Error(errorCode)));
 			bContinueDebugging = false;
+			break;
+		}
 
 		if(m_stopDebugging)
 		{

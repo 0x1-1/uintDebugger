@@ -27,15 +27,34 @@ set_target_properties(test_updater_paths PROPERTIES
 
 add_test(NAME UpdaterPaths COMMAND test_updater_paths)
 
+# Qt6 is already found by the root CMakeLists, but explicitly request Core
+# here so this subdirectory remains independently buildable.
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core)
+
+# ---------------------------------------------------------------------------
+# test_updater_qt_paths
+#   Qt-side updater path validation test. Catches separator-normalization
+#   regressions in the in-app updater manifest/download checks.
+# ---------------------------------------------------------------------------
+add_executable(test_updater_qt_paths test_updater_qt_paths.cpp)
+
+target_link_libraries(test_updater_qt_paths PRIVATE Qt6::Core)
+
+target_include_directories(test_updater_qt_paths PRIVATE
+    ${CMAKE_SOURCE_DIR}/uintDebuggerUpdater/UpdaterWidget
+)
+
+set_target_properties(test_updater_qt_paths PROPERTIES
+    WIN32_EXECUTABLE FALSE
+)
+
+add_test(NAME UpdaterQtPaths COMMAND test_updater_qt_paths)
+
 # ---------------------------------------------------------------------------
 # test_ndb_schema
 #   Qt XML roundtrip test: verifies schemaVersion attribute handling.
 #   Uses QXmlStreamReader/Writer (Qt6::Core) — no QApplication required.
 # ---------------------------------------------------------------------------
-# Qt6 is already found by the root CMakeLists, but explicitly request Core
-# here so this subdirectory remains independently buildable.
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core)
-
 add_executable(test_ndb_schema test_ndb_schema.cpp)
 
 target_link_libraries(test_ndb_schema PRIVATE Qt6::Core)

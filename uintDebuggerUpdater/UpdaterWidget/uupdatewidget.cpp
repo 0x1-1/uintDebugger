@@ -34,6 +34,7 @@
 #include <QTimer>
 
 #include "ucheckupdateswidget.h"
+#include "uqtpathsafety.h"
 #include "uupdatesmodel.h"
 #include "uupdatestableview.h"
 #include "ufiledownloader.h"
@@ -312,13 +313,7 @@ void UUpdateWidget::slot_downloadFileFinished()
     // download destination. This mirrors the validation done when the manifest was
     // first parsed; it guards against any in-memory model tampering.
     const QString updRoot = updatesRootDir();
-    const QString resolvedTarget = QDir(updRoot).absoluteFilePath(relativePath);
-    const QString canonicalUpdRoot = QDir(updRoot).canonicalPath();
-    const bool pathSafe = !QFileInfo(relativePath).isAbsolute() &&
-                          !relativePath.split('/').contains(QStringLiteral("..")) &&
-                          (resolvedTarget.startsWith(canonicalUpdRoot + QDir::separator()) ||
-                           resolvedTarget == canonicalUpdRoot);
-    if(!pathSafe)
+    if(!UpdaterQtSafety::IsPathSafeForRoot(relativePath, updRoot))
     {
         slot_error(tr("Blocked unsafe download path: %1").arg(relativePath));
         return;
@@ -326,7 +321,7 @@ void UUpdateWidget::slot_downloadFileFinished()
 
     createFolders(relativePath);
 
-    const QString targetPath = resolvedTarget;
+    const QString targetPath = UpdaterQtSafety::NormalizedAbsolutePath(QDir(updRoot).absoluteFilePath(QDir::cleanPath(relativePath)));
     index = model->index(m_currentDownloadFile, UUpdatesModel::eURI);
     m_downloader->slot_downloadFile(model->data(index, Qt::DisplayRole).toUrl(), targetPath);
 }

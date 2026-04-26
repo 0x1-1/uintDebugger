@@ -56,6 +56,66 @@ QString MainWindowTitle()
 {
 	return QStringLiteral("[" UINTDEBUGGER_DISPLAY_NAME " v " UINTDEBUGGER_VERSION_DISPLAY_STRING "]");
 }
+
+QString QuoteCommandLineToken(const QString &token)
+{
+	if(token.isEmpty())
+		return QStringLiteral("\"\"");
+
+	bool needsQuotes = false;
+	for(const QChar ch : token)
+	{
+		if(ch.isSpace() || ch == QLatin1Char('"'))
+		{
+			needsQuotes = true;
+			break;
+		}
+	}
+
+	if(!needsQuotes)
+		return token;
+
+	QString quoted;
+	quoted.reserve(token.size() + 2);
+	quoted.append(QLatin1Char('"'));
+	int backslashCount = 0;
+	for(const QChar ch : token)
+	{
+		if(ch == QLatin1Char('\\'))
+		{
+			++backslashCount;
+			continue;
+		}
+
+		if(ch == QLatin1Char('"'))
+		{
+			quoted.append(QString(backslashCount * 2 + 1, QLatin1Char('\\')));
+			quoted.append(ch);
+			backslashCount = 0;
+			continue;
+		}
+
+		if(backslashCount > 0)
+		{
+			quoted.append(QString(backslashCount, QLatin1Char('\\')));
+			backslashCount = 0;
+		}
+		quoted.append(ch);
+	}
+	if(backslashCount > 0)
+		quoted.append(QString(backslashCount * 2, QLatin1Char('\\')));
+	quoted.append(QLatin1Char('"'));
+	return quoted;
+}
+
+QString JoinTargetCommandLine(const QStringList &tokens)
+{
+	QStringList quotedTokens;
+	quotedTokens.reserve(tokens.size());
+	for(const QString &token : tokens)
+		quotedTokens.append(QuoteCommandLineToken(token));
+	return quotedTokens.join(QLatin1Char(' '));
+}
 }
 
 qtDLGUintDebugger::qtDLGUintDebugger(QWidget *parent, Qt::WindowFlags flags)
@@ -749,7 +809,12 @@ void qtDLGUintDebugger::ParseCommandLineArgs()
 					commandLineSearch++;
 					if(commandLineSearch == splittedCommandLine.constEnd()) break;
 
-					coreDebugger->SetCommandLine(*commandLineSearch);
+					QStringList targetArguments;
+					for(; commandLineSearch != splittedCommandLine.constEnd(); ++commandLineSearch)
+						targetArguments.append(*commandLineSearch);
+
+					coreDebugger->SetCommandLine(JoinTargetCommandLine(targetArguments));
+					break;
 				}
 			}
 
