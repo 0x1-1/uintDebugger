@@ -24,7 +24,9 @@
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QStatusBar>
 #include <QTextStream>
+#include <QTimer>
 #include <WinBase.h>
 
 namespace
@@ -68,7 +70,7 @@ bool EnableDebugFlag()
 	LUID luid;
 	HANDLE hToken = NULL;
 
-	if(!OpenProcessToken(GetCurrentProcess(),TOKEN_ADJUST_PRIVILEGES,&hToken))
+	if(!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken))
 		return false;
 
 	if (!LookupPrivilegeValue(NULL,SE_DEBUG_NAME,&luid))
@@ -81,6 +83,7 @@ bool EnableDebugFlag()
 	tkpNewPriv.Privileges[0].Luid = luid;
 	tkpNewPriv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
 
+	SetLastError(ERROR_SUCCESS);
 	AdjustTokenPrivileges(hToken,0,&tkpNewPriv,0,0,0);
 	const bool bGranted = (GetLastError() == ERROR_SUCCESS);
 
@@ -94,10 +97,7 @@ int main(int argc, char *argv[])
 	
 	SetUnhandledExceptionFilter(clsCrashHandler::ErrorReporter);
 
-	if(!EnableDebugFlag())
-	{
-		MessageBoxW(NULL,L"ERROR, Unable to enable Debug Privilege!\r\nThis could cause problems with some features",L"uintDebugger",MB_OK);
-	}
+	const bool debugPrivilegeEnabled = EnableDebugFlag();
 
 	// Qt6: high-DPI is always enabled; PassThrough allows fractional factors (e.g. 150%)
 	QApplication::setHighDpiScaleFactorRoundingPolicy(
@@ -109,5 +109,21 @@ int main(int argc, char *argv[])
 	qInstallMessageHandler(QtMessageToFile);
 	qtDLGUintDebugger w;
 	w.show();
+	QTimer::singleShot(0, &w, [&w, debugPrivilegeEnabled]() {
+		if(!w.isVisible())
+			w.show();
+		if(w.isMinimized())
+			w.showNormal();
+		w.raise();
+		w.activateWindow();
+
+		if(!debugPrivilegeEnabled)
+		{
+			const QString message = QStringLiteral(
+				"Warning: SeDebugPrivilege could not be enabled. Run as Administrator for full debugger access.");
+			qWarning().noquote() << message;
+			w.statusBar()->showMessage(message, 15000);
+		}
+	});
 	return a.exec();
 }
