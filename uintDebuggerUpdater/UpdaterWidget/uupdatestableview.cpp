@@ -16,14 +16,24 @@
  */
 #include "uupdatestableview.h"
 
+#include "uupdatesmodel.h"
+
 #include <QHeaderView>
 
 UUpdatesTableView::UUpdatesTableView(QWidget *parent) :
     QTableView(parent)
 {
-    horizontalHeader()->setStretchLastSection(false);
-    horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    setObjectName(QStringLiteral("updatesTable"));
+    horizontalHeader()->setStretchLastSection(true);
+    horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    horizontalHeader()->setMinimumSectionSize(80);
     verticalHeader()->setVisible(false);
-    setSelectionMode(QAbstractItemView::NoSelection);
+    verticalHeader()->setDefaultSectionSize(34);
+    setAlternatingRowColors(true);
+    setShowGrid(false);
+    setSelectionBehavior(QAbstractItemView::SelectRows);
+    setSelectionMode(QAbstractItemView::SingleSelection);
     setEditTriggers(QAbstractItemView::NoEditTriggers);
+    setFocusPolicy(Qt::NoFocus);
+    setWordWrap(false);
 }

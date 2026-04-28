@@ -22,6 +22,8 @@
 
 class QStackedWidget;
 class QProgressBar;
+class QLabel;
+class QPushButton;
 
 class UCheckUpdatesWidget;
 class UUpdatesModel;
@@ -47,6 +49,8 @@ private:
     void createFolders(const QString &path);
     QString applicationRootDir() const;
     QString updatesRootDir() const;
+    void setHeaderState(const QString &title, const QString &subtitle, const QString &badge, const QString &state);
+    void setActionsEnabled(bool installEnabled, bool checkEnabled, bool quitEnabled = true);
     
 signals:
     void signal_downloadUpdatesFinished();
@@ -63,22 +67,20 @@ protected slots:
     void slot_error(const QString &error);
 
 private:
-    enum EToolBarActions {
-        eINSTALL_UPDATES_ACTION = 0,
-        eQUIT_ACTION,
-        eSEPERATOR_ACTION,
-        eCHECK_UPDATES_ACTION,
-        eMAX_ACTION
-    };
-
     Ui::UUpdateWidget   *ui;
-
-    QList<QAction *>    m_toolBarActions;
 
     QStackedWidget      *m_stackedWidget;
     UCheckUpdatesWidget *m_checkUpdatesWidget;
     UUpdatesTableView   *m_updatesTableView;
     QList<QProgressBar *>   m_progressBarList;
+
+    QLabel              *m_titleLabel;
+    QLabel              *m_subtitleLabel;
+    QLabel              *m_badgeLabel;
+    QLabel              *m_summaryLabel;
+    QPushButton         *m_installButton;
+    QPushButton         *m_checkButton;
+    QPushButton         *m_quitButton;
 
     UFileDownloader     *m_downloader;
 
